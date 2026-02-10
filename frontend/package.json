@@ -12,6 +12,11 @@
   "engines": {
     "node": ">=18.x"
   },
+  "vercel": {
+    "buildCommand": "npm run build",
+    "outputDirectory": "dist",
+    "framework": "vite"
+  },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
