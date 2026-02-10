@@ -89,6 +89,7 @@ async fn main() {
 
     let app = build_app(state);
 
+    // RenderはPORT環境変数を自動的に設定します
     let port = std::env::var("PORT")
         .ok()
         .and_then(|value| value.parse::<u16>().ok())
@@ -96,10 +97,17 @@ async fn main() {
     let address = SocketAddr::from(([0, 0, 0, 0], port));
 
     info!("payloadexchange-mvp listening on http://{}", address);
+    
+    // サーバーが起動したことをログに出力
+    eprintln!("Starting server on port {}", port);
+    eprintln!("Health check endpoint: http://0.0.0.0:{}/health", port);
+    
     let listener = tokio::net::TcpListener::bind(address)
         .await
         .expect("bind should succeed");
 
+    info!("Server started successfully on {}", address);
+    
     if let Err(err) = axum::serve(listener, app).await {
         eprintln!("server error: {err}");
     }
