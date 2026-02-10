@@ -28,6 +28,8 @@ fn build_app(state: SharedState) -> Router {
         .route("/profiles", post(create_profile).get(list_profiles))
         .route("/register", post(register_user))
         .route("/campaigns", post(create_campaign).get(list_campaigns))
+        .route("/campaigns/discovery", get(list_campaign_discovery))
+        .route("/campaigns/:campaign_id", get(get_campaign))
         .route("/tasks/complete", post(complete_task))
         .route("/tool/:service/run", post(run_tool))
         .route("/proxy/:service/run", post(run_proxy))
@@ -71,6 +73,10 @@ async fn main() {
             .run(&db)
             .await
             .expect("database migrations should run");
+
+        if let Err(err) = load_campaigns_from_db(&state).await {
+            eprintln!("failed to load campaigns from database: {err}");
+        }
     }
 
     let app = build_app(state);
@@ -202,30 +208,115 @@ async fn create_campaign(
     State(state): State<SharedState>,
     Json(payload): Json<CreateCampaignRequest>,
 ) -> Response {
-    let mut state = state.inner.write().await;
-
-    let campaign = Campaign {
-        id: Uuid::new_v4(),
-        name: payload.name,
-        sponsor: payload.sponsor,
-        target_roles: payload.target_roles,
-        target_tools: payload.target_tools,
-        required_task: payload.required_task,
-        subsidy_per_call_cents: payload.subsidy_per_call_cents,
-        budget_remaining_cents: payload.budget_cents,
-        active: true,
-        created_at: Utc::now(),
+    let (metrics, db, public_base_url) = {
+        let state = state.inner.read().await;
+        (
+            state.metrics.clone(),
+            state.db.clone(),
+            state.config.public_base_url.clone(),
+        )
     };
 
-    state.campaigns.insert(campaign.id, campaign.clone());
-    respond(
-        &state.metrics,
-        "/campaigns",
-        Ok((StatusCode::CREATED, Json(campaign))),
-    )
+    let result: ApiResult<(StatusCode, Json<CreateCampaignResponse>)> = async {
+        let db = db.ok_or_else(|| ApiError::config("Postgres not configured; set DATABASE_URL"))?;
+
+        if payload.name.trim().is_empty() {
+            return Err(ApiError::validation("name is required"));
+        }
+        if payload.sponsor.trim().is_empty() {
+            return Err(ApiError::validation("sponsor is required"));
+        }
+        if payload.required_task.trim().is_empty() {
+            return Err(ApiError::validation("required_task is required"));
+        }
+        if payload.subsidy_per_call_cents == 0 {
+            return Err(ApiError::validation(
+                "subsidy_per_call_cents must be greater than 0",
+            ));
+        }
+        if payload.budget_cents == 0 {
+            return Err(ApiError::validation("budget_cents must be greater than 0"));
+        }
+
+        for url in &payload.query_urls {
+            reqwest::Url::parse(url)
+                .map_err(|_| ApiError::validation(format!("invalid query URL: {url}")))?;
+        }
+
+        let candidate = Campaign {
+            id: Uuid::new_v4(),
+            name: payload.name,
+            sponsor: payload.sponsor,
+            target_roles: payload.target_roles,
+            target_tools: payload.target_tools,
+            required_task: payload.required_task,
+            subsidy_per_call_cents: payload.subsidy_per_call_cents,
+            budget_total_cents: payload.budget_cents,
+            budget_remaining_cents: payload.budget_cents,
+            query_urls: payload.query_urls,
+            active: true,
+            created_at: Utc::now(),
+        };
+
+        let row = sqlx::query_as::<_, CampaignRow>(
+            r#"
+            insert into campaigns (
+                id, name, sponsor, target_roles, target_tools, required_task,
+                subsidy_per_call_cents, budget_total_cents, budget_remaining_cents,
+                query_urls, active, created_at
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            returning id, name, sponsor, target_roles, target_tools, required_task,
+                subsidy_per_call_cents, budget_total_cents, budget_remaining_cents,
+                query_urls, active, created_at
+            "#,
+        )
+        .bind(candidate.id)
+        .bind(candidate.name)
+        .bind(candidate.sponsor)
+        .bind(candidate.target_roles)
+        .bind(candidate.target_tools)
+        .bind(candidate.required_task)
+        .bind(candidate.subsidy_per_call_cents as i64)
+        .bind(candidate.budget_total_cents as i64)
+        .bind(candidate.budget_remaining_cents as i64)
+        .bind(candidate.query_urls)
+        .bind(candidate.active)
+        .bind(candidate.created_at)
+        .fetch_one(&db)
+        .await
+        .map_err(|err| ApiError::database(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+
+        let campaign = Campaign::try_from(row)
+            .map_err(|err| ApiError::database(StatusCode::INTERNAL_SERVER_ERROR, err))?;
+
+        {
+            let mut state = state.inner.write().await;
+            state.campaigns.insert(campaign.id, campaign.clone());
+        }
+
+        let base = public_base_url.trim_end_matches('/');
+        let response = CreateCampaignResponse {
+            campaign: campaign.clone(),
+            campaign_url: format!("{base}/campaigns/{}", campaign.id),
+            dashboard_url: format!("{base}/dashboard/sponsor/{}", campaign.id),
+        };
+
+        Ok((StatusCode::CREATED, Json(response)))
+    }
+    .await;
+
+    respond(&metrics, "/campaigns", result)
 }
 
 async fn list_campaigns(State(state): State<SharedState>) -> Response {
+    let needs_reload = {
+        let state = state.inner.read().await;
+        state.campaigns.is_empty()
+    };
+    if needs_reload {
+        let _ = load_campaigns_from_db(&state).await;
+    }
+
     let state = state.inner.read().await;
     let mut campaigns: Vec<Campaign> = state.campaigns.values().cloned().collect();
     campaigns.sort_by_key(|campaign| campaign.created_at);
@@ -236,10 +327,113 @@ async fn list_campaigns(State(state): State<SharedState>) -> Response {
     )
 }
 
+async fn get_campaign(State(state): State<SharedState>, Path(campaign_id): Path<Uuid>) -> Response {
+    let needs_reload = {
+        let state = state.inner.read().await;
+        state.campaigns.is_empty()
+    };
+    if needs_reload {
+        let _ = load_campaigns_from_db(&state).await;
+    }
+
+    let state = state.inner.read().await;
+    let campaign = state.campaigns.get(&campaign_id).cloned();
+    match campaign {
+        Some(value) => respond(
+            &state.metrics,
+            "/campaigns/:campaign_id",
+            Ok((StatusCode::OK, Json(value))),
+        ),
+        None => respond(
+            &state.metrics,
+            "/campaigns/:campaign_id",
+            Err::<Response, ApiError>(ApiError::not_found("campaign not found")),
+        ),
+    }
+}
+
+async fn list_campaign_discovery(State(state): State<SharedState>) -> Response {
+    let needs_reload = {
+        let state = state.inner.read().await;
+        state.campaigns.is_empty()
+    };
+    if needs_reload {
+        let _ = load_campaigns_from_db(&state).await;
+    }
+
+    let state = state.inner.read().await;
+    let base = state
+        .config
+        .public_base_url
+        .trim_end_matches('/')
+        .to_string();
+    let mut rows: Vec<CampaignDiscoveryItem> = state
+        .campaigns
+        .values()
+        .cloned()
+        .filter(|campaign| campaign.active)
+        .filter(|campaign| !campaign.query_urls.is_empty())
+        .map(|campaign| CampaignDiscoveryItem {
+            campaign_id: campaign.id,
+            name: campaign.name.clone(),
+            sponsor: campaign.sponsor.clone(),
+            active: campaign.active,
+            query_urls: campaign.query_urls.clone(),
+            service_run_url: format!("{base}/proxy/:service/run"),
+            sponsored_api_discovery_url: format!("{base}/sponsored-apis"),
+        })
+        .collect();
+    rows.sort_by_key(|item| item.name.clone());
+    respond(
+        &state.metrics,
+        "/campaigns/discovery",
+        Ok((StatusCode::OK, Json(rows))),
+    )
+}
+
+async fn load_campaigns_from_db(state: &SharedState) -> ApiResult<Vec<Campaign>> {
+    let db = {
+        let state = state.inner.read().await;
+        state.db.clone()
+    }
+    .ok_or_else(|| ApiError::config("Postgres not configured; set DATABASE_URL"))?;
+
+    let rows = sqlx::query_as::<_, CampaignRow>(
+        r#"
+        select id, name, sponsor, target_roles, target_tools, required_task,
+            subsidy_per_call_cents, budget_total_cents, budget_remaining_cents,
+            query_urls, active, created_at
+        from campaigns
+        order by created_at desc
+        "#,
+    )
+    .fetch_all(&db)
+    .await
+    .map_err(|err| ApiError::database(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+
+    let campaigns: Vec<Campaign> = rows
+        .into_iter()
+        .map(Campaign::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| ApiError::database(StatusCode::INTERNAL_SERVER_ERROR, err))?;
+
+    let mut lock = state.inner.write().await;
+    lock.campaigns = campaigns.iter().map(|c| (c.id, c.clone())).collect();
+    Ok(campaigns)
+}
+
 async fn complete_task(
     State(state): State<SharedState>,
     Json(payload): Json<TaskCompletionRequest>,
 ) -> Response {
+    let needs_reload = {
+        let state = state.inner.read().await;
+        state.campaigns.is_empty()
+    };
+    if needs_reload {
+        let _ = load_campaigns_from_db(&state).await;
+    }
+
     let mut state = state.inner.write().await;
 
     if !state.campaigns.contains_key(&payload.campaign_id) {
@@ -330,6 +524,16 @@ async fn run_proxy(
     Json(payload): Json<ServiceRunRequest>,
 ) -> Response {
     let has_header = headers.contains_key(PAYMENT_SIGNATURE_HEADER);
+
+    if !has_header {
+        let needs_reload = {
+            let state = state.inner.read().await;
+            state.campaigns.is_empty()
+        };
+        if needs_reload {
+            let _ = load_campaigns_from_db(&state).await;
+        }
+    }
 
     if has_header {
         let (user_exists, price, metrics, http, config) = {
@@ -912,6 +1116,14 @@ async fn sponsor_dashboard(
     State(state): State<SharedState>,
     Path(campaign_id): Path<Uuid>,
 ) -> Response {
+    let needs_reload = {
+        let state = state.inner.read().await;
+        state.campaigns.is_empty()
+    };
+    if needs_reload {
+        let _ = load_campaigns_from_db(&state).await;
+    }
+
     let state = state.inner.read().await;
 
     let Some(campaign) = state.campaigns.get(&campaign_id).cloned() else {

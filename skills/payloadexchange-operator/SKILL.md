@@ -17,7 +17,8 @@ description: Operate sponsored APIs and x402-style campaigns for PayloadExchange
 8. Call sponsored APIs via `POST /sponsored-apis/:api_id/run`. Calls are free while `budget_remaining_cents` covers the per-call price; once exhausted, server returns `402` with `PAYMENT-REQUIRED`, then retry with `PAYMENT-SIGNATURE`.
 9. Use `/proxy/:service/run` for sponsored campaign flows and `/tool/:service/run` for direct paid flows.
 10. Log skill usage outcomes to `/creator/metrics/event`.
-11. Read `/creator/metrics` and `/metrics` for operational monitoring.
+11. Read `/campaigns/discovery` for agent campaign URL sources.
+12. Read `/creator/metrics` and `/metrics` for operational monitoring.
 
 ## Sponsored API Tracking
 

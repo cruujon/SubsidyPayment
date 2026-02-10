@@ -217,7 +217,10 @@ pub struct Campaign {
     pub target_tools: Vec<String>,
     pub required_task: String,
     pub subsidy_per_call_cents: u64,
+    pub budget_total_cents: u64,
     pub budget_remaining_cents: u64,
+    #[serde(default)]
+    pub query_urls: Vec<String>,
     pub active: bool,
     pub created_at: DateTime<Utc>,
 }
@@ -233,6 +236,66 @@ pub struct CreateCampaignRequest {
     pub required_task: String,
     pub subsidy_per_call_cents: u64,
     pub budget_cents: u64,
+    #[serde(default)]
+    pub query_urls: Vec<String>,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct CampaignRow {
+    pub id: Uuid,
+    pub name: String,
+    pub sponsor: String,
+    pub target_roles: Vec<String>,
+    pub target_tools: Vec<String>,
+    pub required_task: String,
+    pub subsidy_per_call_cents: i64,
+    pub budget_total_cents: i64,
+    pub budget_remaining_cents: i64,
+    pub query_urls: Vec<String>,
+    pub active: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+impl TryFrom<CampaignRow> for Campaign {
+    type Error = String;
+
+    fn try_from(value: CampaignRow) -> Result<Self, Self::Error> {
+        Ok(Self {
+            id: value.id,
+            name: value.name,
+            sponsor: value.sponsor,
+            target_roles: value.target_roles,
+            target_tools: value.target_tools,
+            required_task: value.required_task,
+            subsidy_per_call_cents: u64::try_from(value.subsidy_per_call_cents)
+                .map_err(|_| "subsidy_per_call_cents must be non-negative".to_string())?,
+            budget_total_cents: u64::try_from(value.budget_total_cents)
+                .map_err(|_| "budget_total_cents must be non-negative".to_string())?,
+            budget_remaining_cents: u64::try_from(value.budget_remaining_cents)
+                .map_err(|_| "budget_remaining_cents must be non-negative".to_string())?,
+            query_urls: value.query_urls,
+            active: value.active,
+            created_at: value.created_at,
+        })
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateCampaignResponse {
+    pub campaign: Campaign,
+    pub campaign_url: String,
+    pub dashboard_url: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CampaignDiscoveryItem {
+    pub campaign_id: Uuid,
+    pub name: String,
+    pub sponsor: String,
+    pub active: bool,
+    pub query_urls: Vec<String>,
+    pub service_run_url: String,
+    pub sponsored_api_discovery_url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

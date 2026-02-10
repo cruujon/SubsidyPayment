@@ -110,9 +110,15 @@ curl -s -X POST http://localhost:3000/campaigns \
     "target_tools":["scraping"],
     "required_task":"signup_acme",
     "subsidy_per_call_cents":5,
-    "budget_cents":500
+    "budget_cents":500,
+    "query_urls":["https://api.example.com/co2/current"]
   }'
 ```
+
+Campaigns are now persisted in Postgres and response includes:
+
+- `campaign_url` (for direct campaign fetch)
+- `dashboard_url` (for sponsor dashboard)
 
 3. Mark sponsor task completion
 
@@ -133,6 +139,12 @@ curl -s -X POST http://localhost:3000/tasks/complete \
 curl -s -X POST http://localhost:3000/proxy/scraping/run \
   -H 'content-type: application/json' \
   -d '{"user_id":"<USER_ID>","input":"collect top 20 AI tool prices"}'
+```
+
+Campaign discovery feed for agents:
+
+```bash
+curl -s http://localhost:3000/campaigns/discovery
 ```
 
 5. Direct user payment flow (no sponsor)
@@ -189,6 +201,12 @@ export X402_PAY_TO=0x<seller_wallet_address>
 export X402_ASSET=0x<testnet_usdc_asset_address>
 export TESTNET_PAYMENT_SIGNATURE_DESIGN=<BASE64_PAYMENT_SIGNATURE_FOR_/tool/design/run>
 cargo test testnet_ -- --nocapture
+```
+
+One-command live test runner:
+
+```bash
+./scripts/run_live_x402_tests.sh
 ```
 
 ## x402scan: Does It Help?
