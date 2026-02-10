@@ -11,5 +11,8 @@ services:
         sync: false
       - key: PORT
         value: 3000
+      - key: RUST_LOG
+        value: info
     healthCheckPath: /health
+    plan: free
 
