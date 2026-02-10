@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: payloadexchange-backend
+    env: rust
+    buildCommand: cargo build --release
+    startCommand: ./target/release/payloadexchange_mvp
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: PORT
+        value: 3000
+    healthCheckPath: /health
+
