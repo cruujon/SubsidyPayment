@@ -253,7 +253,18 @@ function App() {
   async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
     // 環境変数からAPIのベースURLを取得（開発環境では /api、本番環境では環境変数から）
     const apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
-    const response = await fetch(`${apiBaseUrl}${path}`, {
+    
+    // ウォレットアドレスを取得（ログインしている場合）
+    const walletAddress = localStorage.getItem("walletAddress");
+    
+    // GETリクエストの場合、ウォレットアドレスをクエリパラメータとして追加
+    let url = `${apiBaseUrl}${path}`;
+    if (walletAddress && (!init || !init.method || init.method === "GET")) {
+      const separator = path.includes("?") ? "&" : "?";
+      url = `${apiBaseUrl}${path}${separator}sponsor_wallet_address=${encodeURIComponent(walletAddress)}`;
+    }
+    
+    const response = await fetch(url, {
       ...init,
       headers: {
         "content-type": "application/json",
@@ -476,11 +487,15 @@ function App() {
       const required_task = firstConfig.tasks.length > 0 ? firstConfig.tasks[0] : "";
       const subsidy_per_call_cents = firstConfig.subsidy_per_call_cents;
 
+      // ウォレットアドレスを取得
+      const walletAddress = localStorage.getItem("walletAddress");
+      
       await fetchJson<Campaign>("/campaigns", {
         method: "POST",
         body: JSON.stringify({
           name: form.name,
           sponsor: form.sponsor,
+          sponsor_wallet_address: walletAddress || null,
           target_roles: splitCsv(form.target_roles),
           target_tools: splitCsv(form.target_tools),
           required_task: required_task,

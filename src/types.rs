@@ -198,6 +198,8 @@ pub struct Campaign {
     pub id: Uuid,
     pub name: String,
     pub sponsor: String,
+    #[serde(default)]
+    pub sponsor_wallet_address: Option<String>,
     pub target_roles: Vec<String>,
     pub target_tools: Vec<String>,
     pub required_task: String,
@@ -215,6 +217,8 @@ pub struct CreateCampaignRequest {
     pub name: String,
     pub sponsor: String,
     #[serde(default)]
+    pub sponsor_wallet_address: Option<String>,
+    #[serde(default)]
     pub target_roles: Vec<String>,
     #[serde(default)]
     pub target_tools: Vec<String>,
@@ -230,6 +234,7 @@ pub struct CampaignRow {
     pub id: Uuid,
     pub name: String,
     pub sponsor: String,
+    pub sponsor_wallet_address: Option<String>,
     pub target_roles: Vec<String>,
     pub target_tools: Vec<String>,
     pub required_task: String,
@@ -249,6 +254,7 @@ impl TryFrom<CampaignRow> for Campaign {
             id: value.id,
             name: value.name,
             sponsor: value.sponsor,
+            sponsor_wallet_address: value.sponsor_wallet_address,
             target_roles: value.target_roles,
             target_tools: value.target_tools,
             required_task: value.required_task,

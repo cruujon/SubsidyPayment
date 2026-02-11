@@ -5,7 +5,7 @@ mod utils;
 
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -22,6 +22,7 @@ use uuid::Uuid;
 use crate::error::{ApiError, ApiResult};
 use crate::types::*;
 use crate::utils::*;
+use serde::Deserialize;
 
 fn build_app(state: SharedState) -> Router {
     Router::new()
@@ -106,7 +107,7 @@ async fn main() {
             .await
             .expect("database migrations should run");
 
-        if let Err(err) = load_campaigns_from_db(&state).await {
+        if let Err(err) = load_campaigns_from_db(&state, None).await {
             eprintln!("failed to load campaigns from database: {err}");
         }
     }
@@ -335,6 +336,7 @@ async fn create_campaign(
             id: Uuid::new_v4(),
             name: payload.name,
             sponsor: payload.sponsor,
+            sponsor_wallet_address: payload.sponsor_wallet_address,
             target_roles: payload.target_roles,
             target_tools: payload.target_tools,
             required_task: payload.required_task,
@@ -349,11 +351,11 @@ async fn create_campaign(
         let row = sqlx::query_as::<_, CampaignRow>(
             r#"
             insert into campaigns (
-                id, name, sponsor, target_roles, target_tools, required_task,
+                id, name, sponsor, sponsor_wallet_address, target_roles, target_tools, required_task,
                 subsidy_per_call_cents, budget_total_cents, budget_remaining_cents,
                 query_urls, active, created_at
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-            returning id, name, sponsor, target_roles, target_tools, required_task,
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            returning id, name, sponsor, sponsor_wallet_address, target_roles, target_tools, required_task,
                 subsidy_per_call_cents, budget_total_cents, budget_remaining_cents,
                 query_urls, active, created_at
             "#,
@@ -361,6 +363,7 @@ async fn create_campaign(
         .bind(candidate.id)
         .bind(candidate.name)
         .bind(candidate.sponsor)
+        .bind(candidate.sponsor_wallet_address.as_ref())
         .bind(candidate.target_roles)
         .bind(candidate.target_tools)
         .bind(candidate.required_task)
@@ -391,14 +394,22 @@ async fn create_campaign(
     respond(&metrics, "/campaigns", result)
 }
 
-async fn list_campaigns(State(state): State<SharedState>) -> Response {
+#[derive(Deserialize)]
+struct ListCampaignsQuery {
+    sponsor_wallet_address: Option<String>,
+}
+
+async fn list_campaigns(
+    State(state): State<SharedState>,
+    Query(query): Query<ListCampaignsQuery>,
+) -> Response {
     let metrics = {
         let state = state.inner.read().await;
         state.metrics.clone()
     };
 
     let result: ApiResult<(StatusCode, Json<Vec<Campaign>>)> = async {
-        let mut campaigns = load_campaigns_from_db(&state).await?;
+        let mut campaigns = load_campaigns_from_db(&state, query.sponsor_wallet_address.as_deref()).await?;
         campaigns.sort_by_key(|campaign| campaign.created_at);
         Ok((StatusCode::OK, Json(campaigns)))
     }
@@ -414,7 +425,7 @@ async fn get_campaign(State(state): State<SharedState>, Path(campaign_id): Path<
     };
 
     let result: ApiResult<(StatusCode, Json<Campaign>)> = async {
-        let campaigns = load_campaigns_from_db(&state).await?;
+        let campaigns = load_campaigns_from_db(&state, None).await?;
         let campaign = campaigns
             .into_iter()
             .find(|campaign| campaign.id == campaign_id)
@@ -440,7 +451,7 @@ async fn list_campaign_discovery(State(state): State<SharedState>) -> Response {
     };
 
     let result: ApiResult<(StatusCode, Json<Vec<CampaignDiscoveryItem>>)> = async {
-        let campaigns = load_campaigns_from_db(&state).await?;
+        let campaigns = load_campaigns_from_db(&state, None).await?;
         let mut rows: Vec<CampaignDiscoveryItem> = campaigns
             .into_iter()
             .filter(|campaign| campaign.active)
@@ -463,24 +474,40 @@ async fn list_campaign_discovery(State(state): State<SharedState>) -> Response {
     respond(&metrics, "/campaigns/discovery", result)
 }
 
-async fn load_campaigns_from_db(state: &SharedState) -> ApiResult<Vec<Campaign>> {
+async fn load_campaigns_from_db(state: &SharedState, sponsor_wallet_address: Option<&str>) -> ApiResult<Vec<Campaign>> {
     let db = {
         let state = state.inner.read().await;
         state.db.clone()
     }
     .ok_or_else(|| ApiError::config("Postgres not configured; set DATABASE_URL"))?;
 
-    let rows = sqlx::query_as::<_, CampaignRow>(
-        r#"
-        select id, name, sponsor, target_roles, target_tools, required_task,
-            subsidy_per_call_cents, budget_total_cents, budget_remaining_cents,
-            query_urls, active, created_at
-        from campaigns
-        order by created_at desc
-        "#,
-    )
-    .fetch_all(&db)
-    .await
+    let rows = if let Some(wallet_address) = sponsor_wallet_address {
+        sqlx::query_as::<_, CampaignRow>(
+            r#"
+            select id, name, sponsor, sponsor_wallet_address, target_roles, target_tools, required_task,
+                subsidy_per_call_cents, budget_total_cents, budget_remaining_cents,
+                query_urls, active, created_at
+            from campaigns
+            where sponsor_wallet_address = $1
+            order by created_at desc
+            "#,
+        )
+        .bind(wallet_address)
+        .fetch_all(&db)
+        .await
+    } else {
+        sqlx::query_as::<_, CampaignRow>(
+            r#"
+            select id, name, sponsor, sponsor_wallet_address, target_roles, target_tools, required_task,
+                subsidy_per_call_cents, budget_total_cents, budget_remaining_cents,
+                query_urls, active, created_at
+            from campaigns
+            order by created_at desc
+            "#,
+        )
+        .fetch_all(&db)
+        .await
+    }
     .map_err(|err| ApiError::database(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
 
     let campaigns: Vec<Campaign> = rows
