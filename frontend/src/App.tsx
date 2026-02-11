@@ -180,13 +180,13 @@ const TASK_CATEGORIES: TaskCategory[] = [
   {
     name: "Developer Tasks",
     tasks: [
-      "APIキー発行＋1回コール",
-      "SDK 実行",
-      "CLIサンプル実行",
-      "テンプレRepo fork",
-      "ワンクリックデプロイ",
-      "軽微バグ報告",
-      "ドキュメント誤字修正"
+      "Generate API key and make 1 API call",
+      "Run SDK sample",
+      "Execute CLI sample",
+      "Fork template repository",
+      "One-click deploy",
+      "Report minor bug",
+      "Fix typo in documentation"
     ]
   }
 ];
