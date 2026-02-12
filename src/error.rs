@@ -42,9 +42,27 @@ pub enum ApiError {
     Config { message: String },
     #[error("internal error: {message}")]
     Internal { message: String },
+    #[error("rate limited")]
+    RateLimited { retry_after_secs: u64 },
 }
 
 impl ApiError {
+    pub fn unauthorized(message: impl Into<String>) -> Self {
+        Self::Http {
+            status: StatusCode::UNAUTHORIZED,
+            code: "unauthorized".to_string(),
+            message: message.into(),
+        }
+    }
+
+    pub fn forbidden(message: impl Into<String>) -> Self {
+        Self::Http {
+            status: StatusCode::FORBIDDEN,
+            code: "forbidden".to_string(),
+            message: message.into(),
+        }
+    }
+
     pub fn not_found(message: impl Into<String>) -> Self {
         Self::Http {
             status: StatusCode::NOT_FOUND,
@@ -95,6 +113,10 @@ impl ApiError {
         }
     }
 
+    pub fn rate_limited(retry_after_secs: u64) -> Self {
+        Self::RateLimited { retry_after_secs }
+    }
+
     fn status_code(&self) -> StatusCode {
         match self {
             Self::PaymentRequired(_) => StatusCode::PAYMENT_REQUIRED,
@@ -102,6 +124,7 @@ impl ApiError {
             Self::Database { status, .. } => *status,
             Self::Upstream { status, .. } => *status,
             Self::Config { .. } | Self::Internal { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
         }
     }
 
@@ -137,6 +160,11 @@ impl ApiError {
                 message: message.clone(),
                 details: None,
             },
+            Self::RateLimited { retry_after_secs } => ErrorBody {
+                code: "rate_limited".to_string(),
+                message: format!("Too many requests. Retry after {} seconds.", retry_after_secs),
+                details: None,
+            },
         }
     }
 }
@@ -145,6 +173,20 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         match self {
             ApiError::PaymentRequired(payload) => payment_required_response(payload),
+            ApiError::RateLimited { retry_after_secs } => {
+                let body = ErrorResponse {
+                    error: ErrorBody {
+                        code: "rate_limited".to_string(),
+                        message: format!("Too many requests. Retry after {} seconds.", retry_after_secs),
+                        details: None,
+                    },
+                };
+                let mut response = (StatusCode::TOO_MANY_REQUESTS, Json(body)).into_response();
+                if let Ok(val) = HeaderValue::from_str(&retry_after_secs.to_string()) {
+                    response.headers_mut().insert("retry-after", val);
+                }
+                response
+            }
             other => {
                 let status = other.status_code();
                 let body = ErrorResponse {

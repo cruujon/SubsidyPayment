@@ -1,4 +1,5 @@
 mod error;
+mod gpt;
 mod onchain;
 mod types;
 mod utils;
@@ -13,7 +14,7 @@ use axum::{
 use chrono::Utc;
 use prometheus::{Encoder, TextEncoder};
 use sqlx::types::Json as DbJson;
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tracing::info;
@@ -23,6 +24,31 @@ use crate::error::{ApiError, ApiResult};
 use crate::types::*;
 use crate::utils::*;
 use serde::Deserialize;
+
+fn build_gpt_router(state: SharedState) -> Router<SharedState> {
+    let limiter = Arc::new(tokio::sync::Mutex::new(
+        gpt::RateLimiter::new(60, Duration::from_secs(60)),
+    ));
+
+    Router::new()
+        .route("/services", get(gpt::gpt_search_services))
+        .route("/auth", post(gpt::gpt_auth))
+        .route("/tasks/{campaign_id}", get(gpt::gpt_get_tasks))
+        .route(
+            "/tasks/{campaign_id}/complete",
+            post(gpt::gpt_complete_task),
+        )
+        .route("/services/{service}/run", post(gpt::gpt_run_service))
+        .route("/user/status", get(gpt::gpt_user_status))
+        .layer(axum::middleware::from_fn_with_state(
+            state,
+            gpt::verify_gpt_api_key,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            limiter,
+            gpt::rate_limit_middleware,
+        ))
+}
 
 fn build_app(state: SharedState) -> Router {
     Router::new()
@@ -49,6 +75,9 @@ fn build_app(state: SharedState) -> Router {
         .route("/creator/metrics/event", post(record_creator_metric_event))
         .route("/creator/metrics", get(creator_metrics))
         .route("/metrics", get(prometheus_metrics))
+        .route("/.well-known/openapi.yaml", get(serve_openapi_yaml))
+        .route("/privacy", get(serve_privacy_page))
+        .nest("/gpt", build_gpt_router(state.clone()))
         .layer(cors_layer_from_env())
         .with_state(state)
 }
@@ -130,6 +159,26 @@ async fn main() {
     }
 }
 
+async fn serve_openapi_yaml() -> Response {
+    let yaml = include_str!("../openapi.yaml");
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/yaml; charset=utf-8")],
+        yaml,
+    )
+        .into_response()
+}
+
+async fn serve_privacy_page() -> Response {
+    let html = include_str!("../privacy.html");
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        html,
+    )
+        .into_response()
+}
+
 async fn health(State(state): State<SharedState>) -> Response {
     let state = state.inner.read().await;
     respond(
@@ -176,6 +225,7 @@ async fn create_profile(
             tools_used: payload.tools_used,
             attributes: payload.attributes,
             created_at: Utc::now(),
+            source: None,
         };
 
         let inserted = sqlx::query_as::<_, UserProfile>(
@@ -266,6 +316,7 @@ async fn register_user(
             tools_used: payload.tools_used,
             attributes: payload.attributes,
             created_at: Utc::now(),
+            source: None,
         };
 
         let inserted = sqlx::query_as::<_, UserProfile>(

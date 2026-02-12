@@ -35,6 +35,7 @@ pub struct AppConfig {
     pub x402_pay_to: Option<String>,
     pub x402_asset: Option<String>,
     pub public_base_url: String,
+    pub gpt_actions_api_key: Option<String>,
 }
 
 impl AppConfig {
@@ -61,6 +62,7 @@ impl AppConfig {
             x402_asset: std::env::var("X402_ASSET").ok(),
             public_base_url: std::env::var("PUBLIC_BASE_URL")
                 .unwrap_or_else(|_| DEFAULT_PUBLIC_BASE_URL.to_string()),
+            gpt_actions_api_key: std::env::var("GPT_ACTIONS_API_KEY").ok(),
         }
     }
 }
@@ -181,6 +183,8 @@ pub struct UserProfile {
     #[sqlx(json)]
     pub attributes: HashMap<String, String>,
     pub created_at: DateTime<Utc>,
+    #[serde(default)]
+    pub source: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -550,6 +554,168 @@ pub struct SponsoredApiCall {
     pub tx_hash: Option<String>,
     pub caller: Option<String>,
     pub created_at: DateTime<Utc>,
+}
+
+// --- GPT Apps types (Components 2-7) ---
+
+#[derive(Debug, Deserialize)]
+pub struct GptSearchParams {
+    pub q: Option<String>,
+    pub category: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GptSearchResponse {
+    pub services: Vec<GptServiceItem>,
+    pub total_count: usize,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GptServiceItem {
+    pub service_type: String,
+    pub service_id: Uuid,
+    pub name: String,
+    pub sponsor: String,
+    pub required_task: Option<String>,
+    pub subsidy_amount_cents: u64,
+    pub category: Vec<String>,
+    pub active: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GptAuthRequest {
+    pub email: String,
+    pub region: String,
+    #[serde(default)]
+    pub roles: Vec<String>,
+    #[serde(default)]
+    pub tools_used: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GptAuthResponse {
+    pub session_token: Uuid,
+    pub user_id: Uuid,
+    pub email: String,
+    pub is_new_user: bool,
+    pub message: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GptTaskParams {
+    pub session_token: Uuid,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GptTaskResponse {
+    pub campaign_id: Uuid,
+    pub campaign_name: String,
+    pub sponsor: String,
+    pub required_task: String,
+    pub task_description: String,
+    pub task_input_format: GptTaskInputFormat,
+    pub already_completed: bool,
+    pub subsidy_amount_cents: u64,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GptTaskInputFormat {
+    pub task_type: String,
+    pub required_fields: Vec<String>,
+    pub instructions: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GptCompleteTaskRequest {
+    pub session_token: Uuid,
+    pub task_name: String,
+    pub details: Option<String>,
+    pub consent: GptConsentInput,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GptConsentInput {
+    pub data_sharing_agreed: bool,
+    pub purpose_acknowledged: bool,
+    pub contact_permission: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GptCompleteTaskResponse {
+    pub task_completion_id: Uuid,
+    pub campaign_id: Uuid,
+    pub consent_recorded: bool,
+    pub can_use_service: bool,
+    pub message: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GptRunServiceRequest {
+    pub session_token: Uuid,
+    pub input: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GptRunServiceResponse {
+    pub service: String,
+    pub output: String,
+    pub payment_mode: String,
+    pub sponsored_by: Option<String>,
+    pub tx_hash: Option<String>,
+    pub message: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GptUserStatusParams {
+    pub session_token: Uuid,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GptUserStatusResponse {
+    pub user_id: Uuid,
+    pub email: String,
+    pub completed_tasks: Vec<GptCompletedTaskSummary>,
+    pub available_services: Vec<GptAvailableService>,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GptCompletedTaskSummary {
+    pub campaign_id: Uuid,
+    pub campaign_name: String,
+    pub task_name: String,
+    pub completed_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GptAvailableService {
+    pub service: String,
+    pub sponsor: String,
+    pub ready: bool,
+}
+
+// --- GPT Apps DB model types (Components 8, 1.5) ---
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct Consent {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub campaign_id: Uuid,
+    pub consent_type: String,
+    pub granted: bool,
+    pub purpose: Option<String>,
+    pub retention_days: Option<i32>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct GptSession {
+    pub token: Uuid,
+    pub user_id: Uuid,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
 }
 
 fn read_env_u64(key: &str, default: u64) -> u64 {
