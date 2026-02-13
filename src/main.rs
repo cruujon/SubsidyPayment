@@ -1,19 +1,20 @@
 mod error;
+mod gpt;
 mod onchain;
 mod types;
 mod utils;
 
 use axum::{
     Json, Router,
-    extract::{Path, State},
-    http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
+    extract::{Path, Query, State},
+    http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
 use chrono::Utc;
 use prometheus::{Encoder, TextEncoder};
 use sqlx::types::Json as DbJson;
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tracing::info;
@@ -22,6 +23,32 @@ use uuid::Uuid;
 use crate::error::{ApiError, ApiResult};
 use crate::types::*;
 use crate::utils::*;
+use serde::Deserialize;
+
+fn build_gpt_router(state: SharedState) -> Router<SharedState> {
+    let limiter = Arc::new(tokio::sync::Mutex::new(
+        gpt::RateLimiter::new(60, Duration::from_secs(60)),
+    ));
+
+    Router::new()
+        .route("/services", get(gpt::gpt_search_services))
+        .route("/auth", post(gpt::gpt_auth))
+        .route("/tasks/{campaign_id}", get(gpt::gpt_get_tasks))
+        .route(
+            "/tasks/{campaign_id}/complete",
+            post(gpt::gpt_complete_task),
+        )
+        .route("/services/{service}/run", post(gpt::gpt_run_service))
+        .route("/user/status", get(gpt::gpt_user_status))
+        .layer(axum::middleware::from_fn_with_state(
+            state,
+            gpt::verify_gpt_api_key,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            limiter,
+            gpt::rate_limit_middleware,
+        ))
+}
 
 fn build_app(state: SharedState) -> Router {
     Router::new()
@@ -48,6 +75,9 @@ fn build_app(state: SharedState) -> Router {
         .route("/creator/metrics/event", post(record_creator_metric_event))
         .route("/creator/metrics", get(creator_metrics))
         .route("/metrics", get(prometheus_metrics))
+        .route("/.well-known/openapi.yaml", get(serve_openapi_yaml))
+        .route("/privacy", get(serve_privacy_page))
+        .nest("/gpt", build_gpt_router(state.clone()))
         .layer(cors_layer_from_env())
         .with_state(state)
 }
@@ -123,7 +153,7 @@ async fn main() {
             .await
             .expect("database migrations should run");
 
-        if let Err(err) = load_campaigns_from_db(&state).await {
+        if let Err(err) = load_campaigns_from_db(&state, None).await {
             eprintln!("failed to load campaigns from database: {err}");
         }
     }
@@ -144,6 +174,26 @@ async fn main() {
     if let Err(err) = axum::serve(listener, app).await {
         eprintln!("server error: {err}");
     }
+}
+
+async fn serve_openapi_yaml() -> Response {
+    let yaml = include_str!("../openapi.yaml");
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/yaml; charset=utf-8")],
+        yaml,
+    )
+        .into_response()
+}
+
+async fn serve_privacy_page() -> Response {
+    let html = include_str!("../privacy.html");
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        html,
+    )
+        .into_response()
 }
 
 async fn health(State(state): State<SharedState>) -> Response {
@@ -192,6 +242,7 @@ async fn create_profile(
             tools_used: payload.tools_used,
             attributes: payload.attributes,
             created_at: Utc::now(),
+            source: None,
         };
 
         let inserted = sqlx::query_as::<_, UserProfile>(
@@ -282,6 +333,7 @@ async fn register_user(
             tools_used: payload.tools_used,
             attributes: payload.attributes,
             created_at: Utc::now(),
+            source: None,
         };
 
         let inserted = sqlx::query_as::<_, UserProfile>(
@@ -352,6 +404,7 @@ async fn create_campaign(
             id: Uuid::new_v4(),
             name: payload.name,
             sponsor: payload.sponsor,
+            sponsor_wallet_address: payload.sponsor_wallet_address,
             target_roles: payload.target_roles,
             target_tools: payload.target_tools,
             required_task: payload.required_task,
@@ -366,11 +419,11 @@ async fn create_campaign(
         let row = sqlx::query_as::<_, CampaignRow>(
             r#"
             insert into campaigns (
-                id, name, sponsor, target_roles, target_tools, required_task,
+                id, name, sponsor, sponsor_wallet_address, target_roles, target_tools, required_task,
                 subsidy_per_call_cents, budget_total_cents, budget_remaining_cents,
                 query_urls, active, created_at
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-            returning id, name, sponsor, target_roles, target_tools, required_task,
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            returning id, name, sponsor, sponsor_wallet_address, target_roles, target_tools, required_task,
                 subsidy_per_call_cents, budget_total_cents, budget_remaining_cents,
                 query_urls, active, created_at
             "#,
@@ -378,6 +431,7 @@ async fn create_campaign(
         .bind(candidate.id)
         .bind(candidate.name)
         .bind(candidate.sponsor)
+        .bind(candidate.sponsor_wallet_address.as_ref())
         .bind(candidate.target_roles)
         .bind(candidate.target_tools)
         .bind(candidate.required_task)
@@ -408,14 +462,22 @@ async fn create_campaign(
     respond(&metrics, "/campaigns", result)
 }
 
-async fn list_campaigns(State(state): State<SharedState>) -> Response {
+#[derive(Deserialize)]
+struct ListCampaignsQuery {
+    sponsor_wallet_address: Option<String>,
+}
+
+async fn list_campaigns(
+    State(state): State<SharedState>,
+    Query(query): Query<ListCampaignsQuery>,
+) -> Response {
     let metrics = {
         let state = state.inner.read().await;
         state.metrics.clone()
     };
 
     let result: ApiResult<(StatusCode, Json<Vec<Campaign>>)> = async {
-        let mut campaigns = load_campaigns_from_db(&state).await?;
+        let mut campaigns = load_campaigns_from_db(&state, query.sponsor_wallet_address.as_deref()).await?;
         campaigns.sort_by_key(|campaign| campaign.created_at);
         Ok((StatusCode::OK, Json(campaigns)))
     }
@@ -431,7 +493,7 @@ async fn get_campaign(State(state): State<SharedState>, Path(campaign_id): Path<
     };
 
     let result: ApiResult<(StatusCode, Json<Campaign>)> = async {
-        let campaigns = load_campaigns_from_db(&state).await?;
+        let campaigns = load_campaigns_from_db(&state, None).await?;
         let campaign = campaigns
             .into_iter()
             .find(|campaign| campaign.id == campaign_id)
@@ -457,7 +519,7 @@ async fn list_campaign_discovery(State(state): State<SharedState>) -> Response {
     };
 
     let result: ApiResult<(StatusCode, Json<Vec<CampaignDiscoveryItem>>)> = async {
-        let campaigns = load_campaigns_from_db(&state).await?;
+        let campaigns = load_campaigns_from_db(&state, None).await?;
         let mut rows: Vec<CampaignDiscoveryItem> = campaigns
             .into_iter()
             .filter(|campaign| campaign.active)
@@ -480,24 +542,40 @@ async fn list_campaign_discovery(State(state): State<SharedState>) -> Response {
     respond(&metrics, "/campaigns/discovery", result)
 }
 
-async fn load_campaigns_from_db(state: &SharedState) -> ApiResult<Vec<Campaign>> {
+async fn load_campaigns_from_db(state: &SharedState, sponsor_wallet_address: Option<&str>) -> ApiResult<Vec<Campaign>> {
     let db = {
         let state = state.inner.read().await;
         state.db.clone()
     }
     .ok_or_else(|| ApiError::config("Postgres not configured; set DATABASE_URL"))?;
 
-    let rows = sqlx::query_as::<_, CampaignRow>(
-        r#"
-        select id, name, sponsor, target_roles, target_tools, required_task,
-            subsidy_per_call_cents, budget_total_cents, budget_remaining_cents,
-            query_urls, active, created_at
-        from campaigns
-        order by created_at desc
-        "#,
-    )
-    .fetch_all(&db)
-    .await
+    let rows = if let Some(wallet_address) = sponsor_wallet_address {
+        sqlx::query_as::<_, CampaignRow>(
+            r#"
+            select id, name, sponsor, sponsor_wallet_address, target_roles, target_tools, required_task,
+                subsidy_per_call_cents, budget_total_cents, budget_remaining_cents,
+                query_urls, active, created_at
+            from campaigns
+            where sponsor_wallet_address = $1
+            order by created_at desc
+            "#,
+        )
+        .bind(wallet_address)
+        .fetch_all(&db)
+        .await
+    } else {
+        sqlx::query_as::<_, CampaignRow>(
+            r#"
+            select id, name, sponsor, sponsor_wallet_address, target_roles, target_tools, required_task,
+                subsidy_per_call_cents, budget_total_cents, budget_remaining_cents,
+                query_urls, active, created_at
+            from campaigns
+            order by created_at desc
+            "#,
+        )
+        .fetch_all(&db)
+        .await
+    }
     .map_err(|err| ApiError::database(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
 
     let campaigns: Vec<Campaign> = rows

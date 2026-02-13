@@ -1,0 +1,22 @@
+{
+  "feature": "gpt-apps-integration",
+  "description": "GPT Appsに対応させ、ToC（エンドユーザー）がGPT Apps上でサービス選択、タスク実行、タスクベースの支払いまでのE2Eフローを実行できるようにする",
+  "language": "ja",
+  "phase": "tasks-generated",
+  "created_at": "2026-02-11T12:46:00Z",
+  "updated_at": "2026-02-11T13:07:00Z",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  }
+}
