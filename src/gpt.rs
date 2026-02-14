@@ -163,6 +163,8 @@ pub async fn gpt_search_services(
             subsidy_amount_cents: row.subsidy_per_call_cents as u64,
             category: row.target_tools,
             active: row.active,
+            tags: vec![],
+            relevance_score: None,
         });
     }
 
@@ -185,6 +187,8 @@ pub async fn gpt_search_services(
             subsidy_amount_cents: row.price_cents as u64,
             category: vec![row.service_key],
             active: row.active,
+            tags: vec![],
+            relevance_score: None,
         });
     }
 
@@ -216,6 +220,8 @@ pub async fn gpt_search_services(
         services,
         total_count,
         message,
+        applied_filters: None,
+        available_categories: None,
     }))
     }
     .await;

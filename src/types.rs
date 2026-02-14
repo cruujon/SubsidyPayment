@@ -562,6 +562,9 @@ pub struct SponsoredApiCall {
 pub struct GptSearchParams {
     pub q: Option<String>,
     pub category: Option<String>,
+    pub max_budget_cents: Option<u64>,
+    pub intent: Option<String>,
+    pub session_token: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -569,6 +572,19 @@ pub struct GptSearchResponse {
     pub services: Vec<GptServiceItem>,
     pub total_count: usize,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub applied_filters: Option<AppliedFilters>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub available_categories: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AppliedFilters {
+    pub budget: Option<u64>,
+    pub intent: Option<String>,
+    pub category: Option<String>,
+    pub keyword: Option<String>,
+    pub preferences_applied: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -581,6 +597,9 @@ pub struct GptServiceItem {
     pub subsidy_amount_cents: u64,
     pub category: Vec<String>,
     pub active: bool,
+    pub tags: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relevance_score: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -716,6 +735,41 @@ pub struct GptSession {
     pub user_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+}
+
+// --- Smart Service Suggestion: 嗜好管理型 ---
+
+#[derive(Debug, Deserialize)]
+pub struct GptPreferencesParams {
+    pub session_token: Uuid,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GptSetPreferencesRequest {
+    pub session_token: Uuid,
+    pub preferences: Vec<TaskPreference>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TaskPreference {
+    pub task_type: String,
+    pub level: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GptPreferencesResponse {
+    pub user_id: Uuid,
+    pub preferences: Vec<TaskPreference>,
+    pub updated_at: Option<DateTime<Utc>>,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GptSetPreferencesResponse {
+    pub user_id: Uuid,
+    pub preferences_count: usize,
+    pub updated_at: DateTime<Utc>,
+    pub message: String,
 }
 
 fn read_env_u64(key: &str, default: u64) -> u64 {

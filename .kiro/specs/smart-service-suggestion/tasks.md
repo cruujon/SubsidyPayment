@@ -6,8 +6,8 @@
 **対応コンポーネント**: C3, C5
 **概要**: ユーザーのタスク嗜好を永続化するための `user_task_preferences` テーブルを作成する。
 
-- [ ] 1.1: `migrations/0011_user_task_preferences.sql` を作成する。`user_task_preferences` テーブルに `id` (UUID PK), `user_id` (FK → users), `task_type` (TEXT NOT NULL), `level` (TEXT NOT NULL, CHECK IN preferred/neutral/avoided), `created_at`, `updated_at` カラムと `UNIQUE(user_id, task_type)` 制約、`user_id` インデックスを定義する。
-- [ ] 1.2: マイグレーション 0011 のスキーマ検証テストを `src/test.rs` に追加する。テーブル名、カラム、制約、インデックスの存在を検証する。
+- [x] 1.1: `migrations/0011_user_task_preferences.sql` を作成する。`user_task_preferences` テーブルに `id` (UUID PK), `user_id` (FK → users), `task_type` (TEXT NOT NULL), `level` (TEXT NOT NULL, CHECK IN preferred/neutral/avoided), `created_at`, `updated_at` カラムと `UNIQUE(user_id, task_type)` 制約、`user_id` インデックスを定義する。
+- [x] 1.2: マイグレーション 0011 のスキーマ検証テストを `src/test.rs` に追加する。テーブル名、カラム、制約、インデックスの存在を検証する。
 
 ## タスク 2: DBマイグレーション — キャンペーンタグカラム
 
@@ -15,8 +15,8 @@
 **対応コンポーネント**: C4, C5
 **概要**: キャンペーンテーブルにタグ配列カラムを追加する。
 
-- [ ] 2.1: `migrations/0012_campaign_tags.sql` を作成する。`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}'` を定義する。
-- [ ] 2.2: マイグレーション 0012 のスキーマ検証テストを `src/test.rs` に追加する。ALTER TABLE、カラム名、型、デフォルト値を検証する。
+- [x] 2.1: `migrations/0012_campaign_tags.sql` を作成する。`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}'` を定義する。
+- [x] 2.2: マイグレーション 0012 のスキーマ検証テストを `src/test.rs` に追加する。ALTER TABLE、カラム名、型、デフォルト値を検証する。
 
 ## タスク 3: 型定義の拡張と新規型追加 (P)
 
@@ -24,11 +24,11 @@
 **対応コンポーネント**: C6
 **概要**: `src/types.rs` に嗜好管理型と拡張検索型を追加する。
 
-- [ ] 3.1: `GptSearchParams` に `max_budget_cents: Option<u64>`, `intent: Option<String>`, `session_token: Option<Uuid>` フィールドを追加する。
-- [ ] 3.2: `GptSearchResponse` に `applied_filters: Option<AppliedFilters>`, `available_categories: Option<Vec<String>>` フィールドを `#[serde(skip_serializing_if = "Option::is_none")]` 付きで追加する。
-- [ ] 3.3: `GptServiceItem` に `tags: Vec<String>`, `relevance_score: Option<f64>` フィールドを追加する。`relevance_score` は `#[serde(skip_serializing_if = "Option::is_none")]` を付与する。
-- [ ] 3.4: 新規型 `AppliedFilters`, `TaskPreference`, `GptPreferencesParams`, `GptSetPreferencesRequest`, `GptPreferencesResponse`, `GptSetPreferencesResponse` を `src/types.rs` に追加する。
-- [ ] 3.5: 全新規型の構築テストを `src/test.rs` に追加する。各型がインスタンス化可能であることを検証する。
+- [x] 3.1: `GptSearchParams` に `max_budget_cents: Option<u64>`, `intent: Option<String>`, `session_token: Option<Uuid>` フィールドを追加する。
+- [x] 3.2: `GptSearchResponse` に `applied_filters: Option<AppliedFilters>`, `available_categories: Option<Vec<String>>` フィールドを `#[serde(skip_serializing_if = "Option::is_none")]` 付きで追加する。
+- [x] 3.3: `GptServiceItem` に `tags: Vec<String>`, `relevance_score: Option<f64>` フィールドを追加する。`relevance_score` は `#[serde(skip_serializing_if = "Option::is_none")]` を付与する。
+- [x] 3.4: 新規型 `AppliedFilters`, `TaskPreference`, `GptPreferencesParams`, `GptSetPreferencesRequest`, `GptPreferencesResponse`, `GptSetPreferencesResponse` を `src/types.rs` に追加する。
+- [x] 3.5: 全新規型の構築テストを `src/test.rs` に追加する。各型がインスタンス化可能であることを検証する。
 
 ## タスク 4: 嗜好管理ハンドラ
 

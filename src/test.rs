@@ -244,7 +244,7 @@ fn gpt_types_exist_and_are_constructible() {
     use chrono::Utc;
 
     // Component 2: Search
-    let _params = GptSearchParams { q: Some("test".into()), category: None };
+    let _params = GptSearchParams { q: Some("test".into()), category: None, max_budget_cents: None, intent: None, session_token: None };
     let _item = GptServiceItem {
         service_type: "campaign".into(),
         service_id: Uuid::new_v4(),
@@ -254,11 +254,15 @@ fn gpt_types_exist_and_are_constructible() {
         subsidy_amount_cents: 100,
         category: vec!["design".into()],
         active: true,
+        tags: vec![],
+        relevance_score: None,
     };
     let _resp = GptSearchResponse {
         services: vec![],
         total_count: 0,
         message: "No services found".into(),
+        applied_filters: None,
+        available_categories: None,
     };
 
     // Component 3: Auth
@@ -801,6 +805,9 @@ async fn gpt_search_services_returns_empty_when_no_active_services() {
             let params = types::GptSearchParams {
                 q: Some("zzz_nonexistent_service_xyz".to_string()),
                 category: None,
+                max_budget_cents: None,
+                intent: None,
+                session_token: None,
             };
             let result = gpt::gpt_search_services(
                 axum::extract::State(state),
@@ -831,6 +838,9 @@ async fn gpt_search_services_filters_by_category() {
             let params = types::GptSearchParams {
                 q: None,
                 category: Some("zzz_nonexistent_category_xyz".to_string()),
+                max_budget_cents: None,
+                intent: None,
+                session_token: None,
             };
             let result = gpt::gpt_search_services(
                 axum::extract::State(state),
@@ -859,6 +869,9 @@ async fn gpt_search_services_returns_results_without_filters() {
             let params = types::GptSearchParams {
                 q: None,
                 category: None,
+                max_budget_cents: None,
+                intent: None,
+                session_token: None,
             };
             let result = gpt::gpt_search_services(
                 axum::extract::State(state),
@@ -3051,7 +3064,7 @@ async fn gpt_e2e_flow_search_auth_task_complete_run_status() {
             // ========== Step 1: Search Services ==========
             let result = gpt::gpt_search_services(
                 axum::extract::State(state.clone()),
-                axum::extract::Query(types::GptSearchParams { q: None, category: None }),
+                axum::extract::Query(types::GptSearchParams { q: None, category: None, max_budget_cents: None, intent: None, session_token: None }),
             ).await;
             assert!(result.status().is_success(), "Step 1: search services should succeed");
             let search_resp: types::GptSearchResponse = read_typed(result).await;
@@ -3216,4 +3229,313 @@ async fn testnet_payment_signature_service_mismatch_is_rejected() {
             .unwrap_or_default()
             .contains("payment rejected")
     );
+}
+
+// =============================================================================
+// Smart Service Suggestion — タスク 1: DBマイグレーション 0011
+// =============================================================================
+
+#[test]
+fn migration_0011_user_task_preferences_has_expected_schema() {
+    let sql = include_str!("../migrations/0011_user_task_preferences.sql");
+    let lower = sql.to_lowercase();
+
+    // Table creation
+    assert!(
+        lower.contains("create table if not exists user_task_preferences"),
+        "should create user_task_preferences table"
+    );
+
+    // Required columns
+    assert!(
+        lower.contains("id uuid primary key default gen_random_uuid()"),
+        "should have id uuid primary key with gen_random_uuid() default"
+    );
+    assert!(
+        lower.contains("user_id uuid not null references users(id) on delete cascade"),
+        "should have user_id FK to users with ON DELETE CASCADE"
+    );
+    assert!(
+        lower.contains("task_type text not null"),
+        "should have task_type TEXT NOT NULL column"
+    );
+    assert!(
+        lower.contains("level text not null"),
+        "should have level TEXT NOT NULL column"
+    );
+    assert!(
+        lower.contains("created_at timestamptz not null default now()"),
+        "should have created_at column"
+    );
+    assert!(
+        lower.contains("updated_at timestamptz not null default now()"),
+        "should have updated_at column"
+    );
+
+    // CHECK constraint on level
+    assert!(
+        lower.contains("preferred"),
+        "level CHECK should include 'preferred'"
+    );
+    assert!(
+        lower.contains("neutral"),
+        "level CHECK should include 'neutral'"
+    );
+    assert!(
+        lower.contains("avoided"),
+        "level CHECK should include 'avoided'"
+    );
+
+    // UNIQUE constraint
+    assert!(
+        lower.contains("unique (user_id, task_type)"),
+        "should have UNIQUE(user_id, task_type) constraint"
+    );
+
+    // Indexes
+    assert!(
+        lower.contains("user_task_preferences_user_id_idx"),
+        "should have user_id index"
+    );
+    assert!(
+        lower.contains("on user_task_preferences(user_id)"),
+        "user_id index should target correct table and column"
+    );
+}
+
+// =============================================================================
+// Smart Service Suggestion — タスク 3: 型定義の拡張と新規型追加
+// =============================================================================
+
+#[test]
+fn gpt_search_params_supports_extended_fields() {
+    // Task 3.1: GptSearchParams に max_budget_cents, intent, session_token を追加
+    let params = types::GptSearchParams {
+        q: Some("test".into()),
+        category: Some("design".into()),
+        max_budget_cents: Some(500),
+        intent: Some("take a screenshot".into()),
+        session_token: Some(Uuid::new_v4()),
+    };
+
+    assert_eq!(params.q.as_deref(), Some("test"));
+    assert_eq!(params.category.as_deref(), Some("design"));
+    assert_eq!(params.max_budget_cents, Some(500));
+    assert_eq!(params.intent.as_deref(), Some("take a screenshot"));
+    assert!(params.session_token.is_some());
+
+    // 新フィールドは全てオプショナルであること（後方互換性）
+    let params_minimal = types::GptSearchParams {
+        q: None,
+        category: None,
+        max_budget_cents: None,
+        intent: None,
+        session_token: None,
+    };
+    assert!(params_minimal.max_budget_cents.is_none());
+    assert!(params_minimal.intent.is_none());
+    assert!(params_minimal.session_token.is_none());
+}
+
+#[test]
+fn gpt_search_response_supports_applied_filters_and_categories() {
+    // Task 3.2: GptSearchResponse に applied_filters, available_categories を追加
+    use types::{AppliedFilters, GptSearchResponse};
+
+    // applied_filters と available_categories が Some の場合
+    let resp_with_filters = GptSearchResponse {
+        services: vec![],
+        total_count: 0,
+        message: "test".into(),
+        applied_filters: Some(AppliedFilters {
+            budget: Some(500),
+            intent: Some("screenshot".into()),
+            category: None,
+            keyword: None,
+            preferences_applied: true,
+        }),
+        available_categories: Some(vec!["design".into(), "scraping".into()]),
+    };
+
+    assert!(resp_with_filters.applied_filters.is_some());
+    let filters = resp_with_filters.applied_filters.as_ref().unwrap();
+    assert_eq!(filters.budget, Some(500));
+    assert_eq!(filters.intent.as_deref(), Some("screenshot"));
+    assert!(filters.preferences_applied);
+    assert_eq!(resp_with_filters.available_categories.as_ref().unwrap().len(), 2);
+
+    // applied_filters と available_categories が None の場合（後方互換性）
+    let resp_minimal = GptSearchResponse {
+        services: vec![],
+        total_count: 0,
+        message: "test".into(),
+        applied_filters: None,
+        available_categories: None,
+    };
+    assert!(resp_minimal.applied_filters.is_none());
+    assert!(resp_minimal.available_categories.is_none());
+
+    // skip_serializing_if の検証: None の場合 JSON に含まれない
+    let json = serde_json::to_value(&resp_minimal).unwrap();
+    assert!(!json.as_object().unwrap().contains_key("applied_filters"),
+        "applied_filters=None should be omitted from JSON");
+    assert!(!json.as_object().unwrap().contains_key("available_categories"),
+        "available_categories=None should be omitted from JSON");
+
+    // Some の場合は JSON に含まれる
+    let json_with = serde_json::to_value(&resp_with_filters).unwrap();
+    assert!(json_with.as_object().unwrap().contains_key("applied_filters"),
+        "applied_filters=Some should be present in JSON");
+    assert!(json_with.as_object().unwrap().contains_key("available_categories"),
+        "available_categories=Some should be present in JSON");
+}
+
+#[test]
+fn gpt_service_item_supports_tags_and_relevance_score() {
+    // Task 3.3: GptServiceItem に tags, relevance_score を追加
+    use types::GptServiceItem;
+
+    // tags と relevance_score が設定された場合
+    let item_with_score = GptServiceItem {
+        service_type: "campaign".into(),
+        service_id: Uuid::new_v4(),
+        name: "Test Service".into(),
+        sponsor: "Sponsor".into(),
+        required_task: Some("survey".into()),
+        subsidy_amount_cents: 100,
+        category: vec!["design".into()],
+        active: true,
+        tags: vec!["web-scraping".into(), "survey".into()],
+        relevance_score: Some(0.85),
+    };
+
+    assert_eq!(item_with_score.tags.len(), 2);
+    assert_eq!(item_with_score.tags[0], "web-scraping");
+    assert_eq!(item_with_score.relevance_score, Some(0.85));
+
+    // relevance_score が None の場合（後方互換性）
+    let item_no_score = GptServiceItem {
+        service_type: "sponsored_api".into(),
+        service_id: Uuid::new_v4(),
+        name: "API".into(),
+        sponsor: "Sponsor".into(),
+        required_task: None,
+        subsidy_amount_cents: 50,
+        category: vec![],
+        active: true,
+        tags: vec![],
+        relevance_score: None,
+    };
+
+    assert!(item_no_score.tags.is_empty());
+    assert!(item_no_score.relevance_score.is_none());
+
+    // skip_serializing_if: relevance_score=None は JSON に含まれない
+    let json_no_score = serde_json::to_value(&item_no_score).unwrap();
+    assert!(!json_no_score.as_object().unwrap().contains_key("relevance_score"),
+        "relevance_score=None should be omitted from JSON");
+
+    // relevance_score=Some は JSON に含まれる
+    let json_with_score = serde_json::to_value(&item_with_score).unwrap();
+    assert!(json_with_score.as_object().unwrap().contains_key("relevance_score"),
+        "relevance_score=Some should be present in JSON");
+
+    // tags は常に JSON に含まれる
+    assert!(json_with_score.as_object().unwrap().contains_key("tags"),
+        "tags should always be present in JSON");
+}
+
+#[test]
+fn preference_types_are_constructible() {
+    // Task 3.4: 新規型 TaskPreference, GptPreferencesParams, GptSetPreferencesRequest,
+    //           GptPreferencesResponse, GptSetPreferencesResponse を追加
+    use chrono::Utc;
+    use types::{
+        TaskPreference, GptPreferencesParams, GptSetPreferencesRequest,
+        GptPreferencesResponse, GptSetPreferencesResponse,
+    };
+
+    // TaskPreference
+    let pref = TaskPreference {
+        task_type: "survey".into(),
+        level: "avoided".into(),
+    };
+    assert_eq!(pref.task_type, "survey");
+    assert_eq!(pref.level, "avoided");
+    let pref_clone = pref.clone(); // Clone trait
+    assert_eq!(pref_clone.task_type, pref.task_type);
+
+    // TaskPreference は Serialize + Deserialize
+    let json = serde_json::to_string(&pref).unwrap();
+    let deser: TaskPreference = serde_json::from_str(&json).unwrap();
+    assert_eq!(deser.task_type, "survey");
+    assert_eq!(deser.level, "avoided");
+
+    // GptPreferencesParams (Deserialize)
+    let _params = GptPreferencesParams {
+        session_token: Uuid::new_v4(),
+    };
+
+    // GptSetPreferencesRequest (Deserialize)
+    let _req = GptSetPreferencesRequest {
+        session_token: Uuid::new_v4(),
+        preferences: vec![
+            TaskPreference { task_type: "survey".into(), level: "avoided".into() },
+            TaskPreference { task_type: "github_pr".into(), level: "preferred".into() },
+        ],
+    };
+    assert_eq!(_req.preferences.len(), 2);
+
+    // GptPreferencesResponse (Serialize + Deserialize)
+    let resp = GptPreferencesResponse {
+        user_id: Uuid::new_v4(),
+        preferences: vec![
+            TaskPreference { task_type: "data_provision".into(), level: "neutral".into() },
+        ],
+        updated_at: Some(Utc::now()),
+        message: "Your preferences".into(),
+    };
+    let resp_json = serde_json::to_value(&resp).unwrap();
+    assert!(resp_json.get("user_id").is_some());
+    assert!(resp_json.get("preferences").is_some());
+    assert!(resp_json.get("updated_at").is_some());
+
+    // GptPreferencesResponse with updated_at = None
+    let resp_none = GptPreferencesResponse {
+        user_id: Uuid::new_v4(),
+        preferences: vec![],
+        updated_at: None,
+        message: "No preferences set".into(),
+    };
+    assert!(resp_none.updated_at.is_none());
+
+    // GptSetPreferencesResponse (Serialize + Deserialize)
+    let set_resp = GptSetPreferencesResponse {
+        user_id: Uuid::new_v4(),
+        preferences_count: 3,
+        updated_at: Utc::now(),
+        message: "Preferences updated".into(),
+    };
+    let set_json = serde_json::to_value(&set_resp).unwrap();
+    assert_eq!(set_json.get("preferences_count").unwrap().as_u64().unwrap(), 3);
+    assert!(set_json.get("updated_at").is_some());
+}
+
+// =============================================================================
+// Smart Service Suggestion — タスク 2: DBマイグレーション 0012
+// =============================================================================
+
+#[test]
+fn migration_0012_campaign_tags_has_expected_schema() {
+    let sql = include_str!("../migrations/0012_campaign_tags.sql");
+    let lower = sql.to_lowercase();
+
+    // ALTER TABLE to add tags column
+    assert!(lower.contains("alter table"), "should use ALTER TABLE");
+    assert!(lower.contains("campaigns"), "should target campaigns table");
+    assert!(lower.contains("add column"), "should add a column");
+    assert!(lower.contains("if not exists"), "should use IF NOT EXISTS for idempotent migration");
+    assert!(lower.contains("tags"), "should add tags column");
+    assert!(lower.contains("text[]"), "tags should be TEXT[] array type");
+    assert!(lower.contains("default '{}'"), "tags should default to empty array");
 }
