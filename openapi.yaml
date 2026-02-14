@@ -9,6 +9,174 @@ servers:
   - url: https://subsidypayment.example.com
     description: Production
 paths:
+  /agent/discovery/services:
+    get:
+      operationId: discoverAgentServices
+      summary: Discover ranked services for agents (Claude/GPT/Open agents)
+      description: >-
+        Returns a unified discovery index across campaign-backed services and
+        sponsored APIs with ranking signals. This endpoint is intended for
+        agent routing and default service selection.
+      security:
+        - ApiKeyAuth: []
+        - {}
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Keyword against name, sponsor, capability, required task
+        - name: capability
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Exact capability/service key filter (e.g. scraping)
+        - name: sponsor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Case-insensitive sponsor filter
+        - name: max_price_cents
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+          description: Maximum allowed per-call price in cents
+        - name: min_budget_remaining_cents
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+          description: Minimum remaining sponsor budget in cents
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          description: Number of top-ranked rows to return (default 25)
+      responses:
+        "200":
+          description: Ranked service discovery response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDiscoveryResponse"
+        "500":
+          description: Internal server error
+
+  /claude/discovery/services:
+    get:
+      operationId: discoverClaudeServices
+      summary: Claude alias for agent service discovery
+      description: Alias of `/agent/discovery/services`.
+      security:
+        - ApiKeyAuth: []
+        - {}
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: capability
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: sponsor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: max_price_cents
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+        - name: min_budget_remaining_cents
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Ranked service discovery response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDiscoveryResponse"
+        "500":
+          description: Internal server error
+
+  /openclaw/discovery/services:
+    get:
+      operationId: discoverOpenclawServices
+      summary: Openclaw alias for agent service discovery
+      description: Alias of `/agent/discovery/services`.
+      security:
+        - ApiKeyAuth: []
+        - {}
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: capability
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: sponsor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: max_price_cents
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+        - name: min_budget_remaining_cents
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Ranked service discovery response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDiscoveryResponse"
+        "500":
+          description: Internal server error
+
   /gpt/services:
     get:
       operationId: searchServices
@@ -496,6 +664,76 @@ paths:
 
 components:
   schemas:
+    AgentDiscoveryResponse:
+      type: object
+      properties:
+        schema_version:
+          type: string
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentServiceMetadata"
+        total_count:
+          type: integer
+        message:
+          type: string
+    AgentServiceMetadata:
+      type: object
+      properties:
+        source:
+          type: string
+          enum: [campaign, sponsored_api]
+        service_id:
+          type: string
+          format: uuid
+        service_key:
+          type: string
+        name:
+          type: string
+        sponsor:
+          type: string
+        required_task:
+          type: string
+          nullable: true
+        capabilities:
+          type: array
+          items:
+            type: string
+        price_cents:
+          type: integer
+        subsidy_cents:
+          type: integer
+        sla:
+          $ref: "#/components/schemas/AgentServiceSla"
+        budget_total_cents:
+          type: integer
+        budget_remaining_cents:
+          type: integer
+        run_url:
+          type: string
+        ranking_score:
+          type: number
+        ranking_signals:
+          $ref: "#/components/schemas/AgentRankingSignals"
+    AgentServiceSla:
+      type: object
+      properties:
+        tier:
+          type: string
+          enum: [best_effort, standard]
+        target_latency_ms:
+          type: integer
+        target_success_rate:
+          type: number
+    AgentRankingSignals:
+      type: object
+      properties:
+        subsidy_score:
+          type: number
+        budget_health_score:
+          type: number
+        relevance_score:
+          type: number
     GptServiceItem:
       type: object
       properties:

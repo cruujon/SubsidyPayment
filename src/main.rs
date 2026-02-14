@@ -55,13 +55,78 @@ fn build_gpt_router(state: SharedState) -> Router<SharedState> {
         ))
 }
 
-fn build_app(state: SharedState) -> Router {
+fn build_agent_discovery_router(
+    state: SharedState,
+    limiter: Arc<tokio::sync::Mutex<gpt::RateLimiter>>,
+) -> Router<SharedState> {
+    Router::new()
+        .route("/services", get(agent_discovery_services))
+        .layer(axum::middleware::from_fn_with_state(
+            state,
+            verify_agent_discovery_api_key,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            limiter,
+            gpt::rate_limit_middleware,
+        ))
+}
+
+async fn verify_agent_discovery_api_key(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Result<Response, ApiError> {
+    let expected_key = {
+        let s = state.inner.read().await;
+        s.config.agent_discovery_api_key.clone()
+    };
+
+    let expected_key = match expected_key {
+        Some(k) if !k.is_empty() => k,
+        _ => return Ok(next.run(request).await),
+    };
+
+    let auth_header = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| ApiError::unauthorized("API key required"))?;
+
+    let token = auth_header
+        .strip_prefix("Bearer ")
+        .ok_or_else(|| ApiError::unauthorized("Invalid authorization format"))?;
+
+    if token != expected_key {
+        return Err(ApiError::forbidden("Invalid API key"));
+    }
+
+    Ok(next.run(request).await)
+}
+
+fn build_app(state: SharedState, agent_discovery_limit_per_min: u32) -> Router {
+    let discovery_limiter = Arc::new(tokio::sync::Mutex::new(gpt::RateLimiter::new(
+        agent_discovery_limit_per_min,
+        Duration::from_secs(60),
+    )));
+
     Router::new()
         .route("/health", get(health))
         .route("/profiles", post(create_profile).get(list_profiles))
         .route("/register", post(register_user))
         .route("/campaigns", post(create_campaign).get(list_campaigns))
         .route("/campaigns/discovery", get(list_campaign_discovery))
+        .nest(
+            "/agent/discovery",
+            build_agent_discovery_router(state.clone(), discovery_limiter.clone()),
+        )
+        .nest(
+            "/claude/discovery",
+            build_agent_discovery_router(state.clone(), discovery_limiter.clone()),
+        )
+        .nest(
+            "/openclaw/discovery",
+            build_agent_discovery_router(state.clone(), discovery_limiter.clone()),
+        )
         .route("/campaigns/{campaign_id}", get(get_campaign))
         .route("/tasks/complete", post(complete_task))
         .route("/tool/{service}/run", post(run_tool))
@@ -90,13 +155,7 @@ fn build_app(state: SharedState) -> Router {
 fn cors_layer_from_env() -> CorsLayer {
     let layer = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-        .allow_headers([
-            header::CONTENT_TYPE,
-            header::ACCEPT,
-            header::AUTHORIZATION,
-            HeaderName::from_static(PAYMENT_SIGNATURE_HEADER),
-            HeaderName::from_static(X402_VERSION_HEADER),
-        ]);
+        .allow_headers(Any);
 
     let configured = std::env::var("CORS_ALLOW_ORIGINS").unwrap_or_else(|_| "*".to_string());
     if configured.trim() == "*" {
@@ -105,9 +164,8 @@ fn cors_layer_from_env() -> CorsLayer {
 
     let origins: Vec<HeaderValue> = configured
         .split(',')
-        .map(str::trim)
-        .filter(|origin| !origin.is_empty())
-        .filter_map(|origin| HeaderValue::from_str(origin).ok())
+        .filter_map(|origin| normalize_origin(origin))
+        .filter_map(|origin| HeaderValue::from_str(&origin).ok())
         .collect();
 
     if origins.is_empty() {
@@ -115,6 +173,30 @@ fn cors_layer_from_env() -> CorsLayer {
     } else {
         layer.allow_origin(AllowOrigin::list(origins))
     }
+}
+
+fn normalize_origin(origin: &str) -> Option<String> {
+    // Accept common deploy-time formatting mistakes such as wrapping quotes,
+    // trailing slashes, and path fragments.
+    let cleaned = origin
+        .trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .trim_end_matches('/');
+
+    if cleaned.is_empty() {
+        return None;
+    }
+
+    if let Some((scheme, rest)) = cleaned.split_once("://") {
+        let authority = rest.split('/').next().unwrap_or(rest).trim();
+        if authority.is_empty() {
+            return None;
+        }
+        return Some(format!("{scheme}://{authority}"));
+    }
+
+    Some(cleaned.to_string())
 }
 
 #[tokio::main]
@@ -146,7 +228,12 @@ async fn main() {
         }
     }
 
-    let app = build_app(state);
+    let agent_discovery_limit_per_min = {
+        let state_guard = state.inner.read().await;
+        state_guard.config.agent_discovery_rate_limit_per_min
+    };
+
+    let app = build_app(state, agent_discovery_limit_per_min);
 
     let port = std::env::var("PORT")
         .ok()
@@ -531,6 +618,297 @@ async fn list_campaign_discovery(State(state): State<SharedState>) -> Response {
     respond(&metrics, "/campaigns/discovery", result)
 }
 
+async fn agent_discovery_services(
+    State(state): State<SharedState>,
+    Query(params): Query<AgentDiscoveryParams>,
+) -> Response {
+    let (metrics, base, sponsored_api_timeout_secs) = {
+        let state = state.inner.read().await;
+        (
+            state.metrics.clone(),
+            state
+                .config
+                .public_base_url
+                .trim_end_matches('/')
+                .to_string(),
+            state.config.sponsored_api_timeout_secs,
+        )
+    };
+
+    let result: ApiResult<(StatusCode, Json<AgentDiscoveryResponse>)> = async {
+        let campaigns = load_campaigns_from_db(&state, None).await?;
+        let sponsored_apis = load_sponsored_apis_from_db(&state).await?;
+
+        let q_filter = params.q.as_ref().map(|q| q.to_lowercase());
+        let capability_filter = params
+            .capability
+            .as_ref()
+            .map(|c| canonical_capability(c));
+        let sponsor_filter = params.sponsor.as_ref().map(|s| s.to_lowercase());
+        let max_price_cents = params.max_price_cents;
+        let min_budget_remaining_cents = params.min_budget_remaining_cents;
+        let limit = params.limit.unwrap_or(25).clamp(1, 100);
+
+        let mut services: Vec<AgentServiceMetadata> = Vec::new();
+
+        for campaign in campaigns.into_iter().filter(|c| c.active) {
+            let mut capabilities = if campaign.target_tools.is_empty() {
+                vec!["generic".to_string()]
+            } else {
+                campaign
+                    .target_tools
+                    .iter()
+                    .map(|tool| canonical_capability(tool))
+                    .collect::<Vec<_>>()
+            };
+            capabilities.sort();
+            capabilities.dedup();
+
+            for capability in capabilities {
+                if let Some(capability_filter) = capability_filter.as_ref() {
+                    if capability != *capability_filter {
+                        continue;
+                    }
+                }
+
+                let sponsor_lower = campaign.sponsor.to_lowercase();
+                if let Some(sponsor_filter) = sponsor_filter.as_ref() {
+                    if !sponsor_lower.contains(sponsor_filter) {
+                        continue;
+                    }
+                }
+
+                let required_task = Some(campaign.required_task.clone());
+                let query_match = if let Some(q_filter) = q_filter.as_ref() {
+                    let name_lower = campaign.name.to_lowercase();
+                    let required_task_lower =
+                        required_task.as_deref().unwrap_or_default().to_lowercase();
+                    name_lower.contains(q_filter)
+                        || sponsor_lower.contains(q_filter)
+                        || capability.contains(q_filter)
+                        || required_task_lower.contains(q_filter)
+                } else {
+                    true
+                };
+                if !query_match {
+                    continue;
+                }
+
+                let price_cents = inferred_service_price_cents(&capability);
+                if let Some(max_price) = max_price_cents {
+                    if price_cents > max_price {
+                        continue;
+                    }
+                }
+                if let Some(min_budget_remaining) = min_budget_remaining_cents {
+                    if campaign.budget_remaining_cents < min_budget_remaining {
+                        continue;
+                    }
+                }
+
+                let relevance_score = if q_filter.is_some() {
+                    1.0
+                } else if capability_filter.is_some() {
+                    0.8
+                } else {
+                    0.6
+                };
+                let (ranking_score, ranking_signals) = build_agent_ranking(
+                    campaign.subsidy_per_call_cents,
+                    price_cents,
+                    campaign.budget_total_cents,
+                    campaign.budget_remaining_cents,
+                    relevance_score,
+                );
+
+                services.push(AgentServiceMetadata {
+                    source: AgentServiceSource::Campaign,
+                    service_id: campaign.id,
+                    service_key: capability.clone(),
+                    name: format!("{} ({})", campaign.name, capability),
+                    sponsor: campaign.sponsor.clone(),
+                    required_task,
+                    capabilities: vec![capability.clone()],
+                    price_cents,
+                    subsidy_cents: campaign.subsidy_per_call_cents,
+                    sla: AgentServiceSla {
+                        tier: AgentSlaTier::BestEffort,
+                        target_latency_ms: 5000,
+                        target_success_rate: 0.95,
+                    },
+                    budget_total_cents: campaign.budget_total_cents,
+                    budget_remaining_cents: campaign.budget_remaining_cents,
+                    run_url: format!("{base}/tool/{capability}/run"),
+                    ranking_score,
+                    ranking_signals,
+                });
+            }
+        }
+
+        for api in sponsored_apis.into_iter().filter(|api| api.active) {
+            let capability = canonical_capability(&api.service_key);
+            if let Some(capability_filter) = capability_filter.as_ref() {
+                if capability != *capability_filter {
+                    continue;
+                }
+            }
+
+            let sponsor_lower = api.sponsor.to_lowercase();
+            if let Some(sponsor_filter) = sponsor_filter.as_ref() {
+                if !sponsor_lower.contains(sponsor_filter) {
+                    continue;
+                }
+            }
+
+            let query_match = if let Some(q_filter) = q_filter.as_ref() {
+                let name_lower = api.name.to_lowercase();
+                name_lower.contains(q_filter)
+                    || sponsor_lower.contains(q_filter)
+                    || capability.contains(q_filter)
+            } else {
+                true
+            };
+            if !query_match {
+                continue;
+            }
+
+            if let Some(max_price) = max_price_cents {
+                if api.price_cents > max_price {
+                    continue;
+                }
+            }
+            if let Some(min_budget_remaining) = min_budget_remaining_cents {
+                if api.budget_remaining_cents < min_budget_remaining {
+                    continue;
+                }
+            }
+
+            let relevance_score = if q_filter.is_some() {
+                1.0
+            } else if capability_filter.is_some() {
+                0.8
+            } else {
+                0.6
+            };
+            let (ranking_score, ranking_signals) = build_agent_ranking(
+                api.price_cents,
+                api.price_cents,
+                api.budget_total_cents,
+                api.budget_remaining_cents,
+                relevance_score,
+            );
+
+            services.push(AgentServiceMetadata {
+                source: AgentServiceSource::SponsoredApi,
+                service_id: api.id,
+                service_key: capability.clone(),
+                name: api.name.clone(),
+                sponsor: api.sponsor.clone(),
+                required_task: None,
+                capabilities: vec![capability.clone()],
+                price_cents: api.price_cents,
+                subsidy_cents: api.price_cents,
+                sla: AgentServiceSla {
+                    tier: AgentSlaTier::Standard,
+                    target_latency_ms: sponsored_api_timeout_secs.saturating_mul(1000),
+                    target_success_rate: 0.95,
+                },
+                budget_total_cents: api.budget_total_cents,
+                budget_remaining_cents: api.budget_remaining_cents,
+                run_url: format!("{base}/sponsored-apis/{}/run", api.id),
+                ranking_score,
+                ranking_signals,
+            });
+        }
+
+        services.sort_by(|a, b| {
+            b.ranking_score
+                .total_cmp(&a.ranking_score)
+                .then_with(|| a.price_cents.cmp(&b.price_cents))
+        });
+
+        let total_count = services.len();
+        services.truncate(limit);
+
+        let message = if total_count == 0 {
+            "No services found for the provided filters.".to_string()
+        } else {
+            format!(
+                "Found {} service(s); returning top {} ranked result(s).",
+                total_count,
+                services.len()
+            )
+        };
+
+        Ok((
+            StatusCode::OK,
+            Json(AgentDiscoveryResponse {
+                schema_version: AGENT_DISCOVERY_SCHEMA_VERSION.to_string(),
+                services,
+                total_count,
+                message,
+            }),
+        ))
+    }
+    .await;
+
+    respond(&metrics, "/agent/discovery/services", result)
+}
+
+fn canonical_capability(raw: &str) -> String {
+    let normalized = raw
+        .trim()
+        .to_lowercase()
+        .replace('_', "-")
+        .replace(' ', "-");
+
+    match normalized.as_str() {
+        "scrape" | "web-scrape" | "web-scraping" => "scraping".to_string(),
+        "ui-design" | "designing" => "design".to_string(),
+        "data-tool" | "data-tools" => "data-tooling".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn build_agent_ranking(
+    subsidy_cents: u64,
+    price_cents: u64,
+    budget_total_cents: u64,
+    budget_remaining_cents: u64,
+    relevance_score: f64,
+) -> (f64, AgentRankingSignals) {
+    let subsidy_score = ((subsidy_cents as f64) / (price_cents.max(1) as f64)).clamp(0.0, 1.0);
+    let budget_health_score = if budget_total_cents == 0 {
+        0.0
+    } else {
+        (budget_remaining_cents as f64 / budget_total_cents as f64).clamp(0.0, 1.0)
+    };
+    let relevance_score = relevance_score.clamp(0.0, 1.0);
+
+    let ranking_score =
+        (0.45 * subsidy_score + 0.35 * budget_health_score + 0.20 * relevance_score).clamp(0.0, 1.0);
+
+    (
+        ranking_score,
+        AgentRankingSignals {
+            subsidy_score,
+            budget_health_score,
+            relevance_score,
+        },
+    )
+}
+
+fn inferred_service_price_cents(service: &str) -> u64 {
+    // Keep this in sync with AppState::service_price for campaign-backed services.
+    match service {
+        "scraping" => 5,
+        "design" => 8,
+        "storage" => 3,
+        "data-tooling" => 4,
+        _ => DEFAULT_PRICE_CENTS,
+    }
+}
+
 async fn load_campaigns_from_db(
     state: &SharedState,
     sponsor_wallet_address: Option<&str>,
@@ -577,6 +955,35 @@ async fn load_campaigns_from_db(
         .map_err(|err| ApiError::database(StatusCode::INTERNAL_SERVER_ERROR, err))?;
 
     Ok(campaigns)
+}
+
+async fn load_sponsored_apis_from_db(state: &SharedState) -> ApiResult<Vec<SponsoredApi>> {
+    let db = {
+        let state = state.inner.read().await;
+        state.db.clone()
+    }
+    .ok_or_else(|| ApiError::config("Postgres not configured; set DATABASE_URL"))?;
+
+    let api_rows = sqlx::query_as::<_, SponsoredApiRow>(
+        r#"
+        select id, name, sponsor, description, upstream_url, upstream_method,
+            upstream_headers, price_cents, budget_total_cents, budget_remaining_cents,
+            active, service_key, created_at
+        from sponsored_apis
+        order by created_at desc
+        "#,
+    )
+    .fetch_all(&db)
+    .await
+    .map_err(|err| ApiError::database(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+
+    let apis: Vec<SponsoredApi> = api_rows
+        .into_iter()
+        .map(SponsoredApi::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| ApiError::database(StatusCode::INTERNAL_SERVER_ERROR, err))?;
+
+    Ok(apis)
 }
 
 async fn complete_task(
