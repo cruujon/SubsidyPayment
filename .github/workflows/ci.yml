@@ -6,6 +6,10 @@ on:
     branches:
       - "main"
       - "deploy-test"
+  pull_request_target:
+    branches:
+      - "main"
+      - "deploy-test"
   workflow_dispatch:
 
 concurrency:
