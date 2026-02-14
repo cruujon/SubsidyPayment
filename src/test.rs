@@ -20,7 +20,13 @@ fn test_app() -> (Router, SharedState) {
     let state = SharedState {
         inner: Arc::new(RwLock::new(AppState::new())),
     };
-    (build_app(state.clone()), state)
+    (
+        build_app(
+            state.clone(),
+            DEFAULT_AGENT_DISCOVERY_RATE_LIMIT_PER_MIN as u32,
+        ),
+        state,
+    )
 }
 
 async fn post_json(
@@ -3584,7 +3590,7 @@ async fn gpt_auth_middleware_rejects_without_api_key_when_configured() {
         s.config.gpt_actions_api_key = Some("test-secret-key".to_string());
     }
 
-    let app = build_app(state);
+    let app = build_app(state, DEFAULT_AGENT_DISCOVERY_RATE_LIMIT_PER_MIN as u32);
 
     // Request without Authorization header should be rejected
     let response = app
@@ -3615,7 +3621,7 @@ async fn gpt_auth_middleware_rejects_invalid_api_key() {
         s.config.gpt_actions_api_key = Some("correct-key".to_string());
     }
 
-    let app = build_app(state);
+    let app = build_app(state, DEFAULT_AGENT_DISCOVERY_RATE_LIMIT_PER_MIN as u32);
 
     let response = app
         .oneshot(
@@ -3645,7 +3651,7 @@ async fn gpt_auth_middleware_accepts_valid_api_key() {
         s.config.gpt_actions_api_key = Some("correct-key".to_string());
     }
 
-    let app = build_app(state);
+    let app = build_app(state, DEFAULT_AGENT_DISCOVERY_RATE_LIMIT_PER_MIN as u32);
 
     let response = app
         .oneshot(
@@ -3681,7 +3687,7 @@ async fn gpt_auth_middleware_skips_when_no_key_configured() {
         );
     }
 
-    let app = build_app(state);
+    let app = build_app(state, DEFAULT_AGENT_DISCOVERY_RATE_LIMIT_PER_MIN as u32);
 
     let response = app
         .oneshot(
@@ -3712,7 +3718,7 @@ async fn static_endpoints_not_behind_gpt_auth() {
         s.config.gpt_actions_api_key = Some("secret-key".to_string());
     }
 
-    let app = build_app(state);
+    let app = build_app(state, DEFAULT_AGENT_DISCOVERY_RATE_LIMIT_PER_MIN as u32);
 
     // OpenAPI endpoint should NOT require API key (not under /gpt prefix)
     let response = app
@@ -4595,7 +4601,7 @@ async fn gpt_preferences_behind_auth_middleware() {
         let mut s = state.inner.write().await;
         s.config.gpt_actions_api_key = Some("pref-test-key".to_string());
     }
-    let app = build_app(state);
+    let app = build_app(state, DEFAULT_AGENT_DISCOVERY_RATE_LIMIT_PER_MIN as u32);
 
     // GET without auth should be rejected
     let response = app
