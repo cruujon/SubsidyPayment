@@ -556,6 +556,65 @@ pub struct SponsoredApiCall {
     pub created_at: DateTime<Utc>,
 }
 
+// --- Agent discovery (Claude / general agents) ---
+
+#[derive(Debug, Deserialize)]
+pub struct AgentDiscoveryParams {
+    pub q: Option<String>,
+    pub capability: Option<String>,
+    pub sponsor: Option<String>,
+    pub max_price_cents: Option<u64>,
+    pub min_budget_remaining_cents: Option<u64>,
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentServiceSource {
+    Campaign,
+    SponsoredApi,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentServiceSla {
+    pub tier: String,
+    pub target_latency_ms: u64,
+    pub target_success_rate: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentRankingSignals {
+    pub subsidy_score: f64,
+    pub budget_health_score: f64,
+    pub relevance_score: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentServiceMetadata {
+    pub source: AgentServiceSource,
+    pub service_id: Uuid,
+    pub service_key: String,
+    pub name: String,
+    pub sponsor: String,
+    pub required_task: Option<String>,
+    pub capabilities: Vec<String>,
+    pub price_cents: u64,
+    pub subsidy_cents: u64,
+    pub sla: AgentServiceSla,
+    pub budget_total_cents: u64,
+    pub budget_remaining_cents: u64,
+    pub run_url: String,
+    pub ranking_score: f64,
+    pub ranking_signals: AgentRankingSignals,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentDiscoveryResponse {
+    pub services: Vec<AgentServiceMetadata>,
+    pub total_count: usize,
+    pub message: String,
+}
+
 // --- GPT Apps types (Components 2-7) ---
 
 #[derive(Debug, Deserialize)]

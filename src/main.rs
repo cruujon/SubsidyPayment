@@ -57,6 +57,8 @@ fn build_app(state: SharedState) -> Router {
         .route("/register", post(register_user))
         .route("/campaigns", post(create_campaign).get(list_campaigns))
         .route("/campaigns/discovery", get(list_campaign_discovery))
+        .route("/agent/discovery/services", get(agent_discovery_services))
+        .route("/claude/discovery/services", get(agent_discovery_services))
         .route("/campaigns/{campaign_id}", get(get_campaign))
         .route("/tasks/complete", post(complete_task))
         .route("/tool/{service}/run", post(run_tool))
@@ -542,6 +544,273 @@ async fn list_campaign_discovery(State(state): State<SharedState>) -> Response {
     respond(&metrics, "/campaigns/discovery", result)
 }
 
+async fn agent_discovery_services(
+    State(state): State<SharedState>,
+    Query(params): Query<AgentDiscoveryParams>,
+) -> Response {
+    let (metrics, base, sponsored_api_timeout_secs) = {
+        let state = state.inner.read().await;
+        (
+            state.metrics.clone(),
+            state
+                .config
+                .public_base_url
+                .trim_end_matches('/')
+                .to_string(),
+            state.config.sponsored_api_timeout_secs,
+        )
+    };
+
+    let result: ApiResult<(StatusCode, Json<AgentDiscoveryResponse>)> = async {
+        let campaigns = load_campaigns_from_db(&state, None).await?;
+        let sponsored_apis = load_sponsored_apis_from_db(&state).await?;
+
+        let q_filter = params.q.as_ref().map(|q| q.to_lowercase());
+        let capability_filter = params.capability.as_ref().map(|c| c.to_lowercase());
+        let sponsor_filter = params.sponsor.as_ref().map(|s| s.to_lowercase());
+        let max_price_cents = params.max_price_cents;
+        let min_budget_remaining_cents = params.min_budget_remaining_cents;
+        let limit = params.limit.unwrap_or(25).clamp(1, 100);
+
+        let mut services: Vec<AgentServiceMetadata> = Vec::new();
+
+        for campaign in campaigns.into_iter().filter(|c| c.active) {
+            let capabilities = if campaign.target_tools.is_empty() {
+                vec!["generic".to_string()]
+            } else {
+                campaign.target_tools.clone()
+            };
+
+            for capability in capabilities {
+                let capability_lower = capability.to_lowercase();
+                if let Some(capability_filter) = capability_filter.as_ref() {
+                    if capability_lower != *capability_filter {
+                        continue;
+                    }
+                }
+
+                let sponsor_lower = campaign.sponsor.to_lowercase();
+                if let Some(sponsor_filter) = sponsor_filter.as_ref() {
+                    if !sponsor_lower.contains(sponsor_filter) {
+                        continue;
+                    }
+                }
+
+                let required_task = Some(campaign.required_task.clone());
+                let query_match = if let Some(q_filter) = q_filter.as_ref() {
+                    let name_lower = campaign.name.to_lowercase();
+                    let required_task_lower =
+                        required_task.as_deref().unwrap_or_default().to_lowercase();
+                    name_lower.contains(q_filter)
+                        || sponsor_lower.contains(q_filter)
+                        || capability_lower.contains(q_filter)
+                        || required_task_lower.contains(q_filter)
+                } else {
+                    true
+                };
+                if !query_match {
+                    continue;
+                }
+
+                let price_cents = inferred_service_price_cents(&capability);
+                if let Some(max_price) = max_price_cents {
+                    if price_cents > max_price {
+                        continue;
+                    }
+                }
+                if let Some(min_budget_remaining) = min_budget_remaining_cents {
+                    if campaign.budget_remaining_cents < min_budget_remaining {
+                        continue;
+                    }
+                }
+
+                let relevance_score = if q_filter.is_some() {
+                    1.0
+                } else if capability_filter.is_some() {
+                    0.8
+                } else {
+                    0.6
+                };
+                let (ranking_score, ranking_signals) = build_agent_ranking(
+                    campaign.subsidy_per_call_cents,
+                    price_cents,
+                    campaign.budget_total_cents,
+                    campaign.budget_remaining_cents,
+                    relevance_score,
+                );
+
+                services.push(AgentServiceMetadata {
+                    source: AgentServiceSource::Campaign,
+                    service_id: campaign.id,
+                    service_key: capability.clone(),
+                    name: format!("{} ({})", campaign.name, capability),
+                    sponsor: campaign.sponsor.clone(),
+                    required_task,
+                    capabilities: vec![capability.clone()],
+                    price_cents,
+                    subsidy_cents: campaign.subsidy_per_call_cents,
+                    sla: AgentServiceSla {
+                        tier: "best_effort".to_string(),
+                        target_latency_ms: 5000,
+                        target_success_rate: 0.95,
+                    },
+                    budget_total_cents: campaign.budget_total_cents,
+                    budget_remaining_cents: campaign.budget_remaining_cents,
+                    run_url: format!("{base}/tool/{capability}/run"),
+                    ranking_score,
+                    ranking_signals,
+                });
+            }
+        }
+
+        for api in sponsored_apis.into_iter().filter(|api| api.active) {
+            let capability_lower = api.service_key.to_lowercase();
+            if let Some(capability_filter) = capability_filter.as_ref() {
+                if capability_lower != *capability_filter {
+                    continue;
+                }
+            }
+
+            let sponsor_lower = api.sponsor.to_lowercase();
+            if let Some(sponsor_filter) = sponsor_filter.as_ref() {
+                if !sponsor_lower.contains(sponsor_filter) {
+                    continue;
+                }
+            }
+
+            let query_match = if let Some(q_filter) = q_filter.as_ref() {
+                let name_lower = api.name.to_lowercase();
+                name_lower.contains(q_filter)
+                    || sponsor_lower.contains(q_filter)
+                    || capability_lower.contains(q_filter)
+            } else {
+                true
+            };
+            if !query_match {
+                continue;
+            }
+
+            if let Some(max_price) = max_price_cents {
+                if api.price_cents > max_price {
+                    continue;
+                }
+            }
+            if let Some(min_budget_remaining) = min_budget_remaining_cents {
+                if api.budget_remaining_cents < min_budget_remaining {
+                    continue;
+                }
+            }
+
+            let relevance_score = if q_filter.is_some() {
+                1.0
+            } else if capability_filter.is_some() {
+                0.8
+            } else {
+                0.6
+            };
+            let (ranking_score, ranking_signals) = build_agent_ranking(
+                api.price_cents,
+                api.price_cents,
+                api.budget_total_cents,
+                api.budget_remaining_cents,
+                relevance_score,
+            );
+
+            services.push(AgentServiceMetadata {
+                source: AgentServiceSource::SponsoredApi,
+                service_id: api.id,
+                service_key: api.service_key.clone(),
+                name: api.name.clone(),
+                sponsor: api.sponsor.clone(),
+                required_task: None,
+                capabilities: vec![api.service_key.clone()],
+                price_cents: api.price_cents,
+                subsidy_cents: api.price_cents,
+                sla: AgentServiceSla {
+                    tier: "best_effort".to_string(),
+                    target_latency_ms: sponsored_api_timeout_secs.saturating_mul(1000),
+                    target_success_rate: 0.95,
+                },
+                budget_total_cents: api.budget_total_cents,
+                budget_remaining_cents: api.budget_remaining_cents,
+                run_url: format!("{base}/sponsored-apis/{}/run", api.id),
+                ranking_score,
+                ranking_signals,
+            });
+        }
+
+        services.sort_by(|a, b| {
+            b.ranking_score
+                .total_cmp(&a.ranking_score)
+                .then_with(|| a.price_cents.cmp(&b.price_cents))
+        });
+
+        let total_count = services.len();
+        services.truncate(limit);
+
+        let message = if total_count == 0 {
+            "No services found for the provided filters.".to_string()
+        } else {
+            format!(
+                "Found {} service(s); returning top {} ranked result(s).",
+                total_count,
+                services.len()
+            )
+        };
+
+        Ok((
+            StatusCode::OK,
+            Json(AgentDiscoveryResponse {
+                services,
+                total_count,
+                message,
+            }),
+        ))
+    }
+    .await;
+
+    respond(&metrics, "/agent/discovery/services", result)
+}
+
+fn build_agent_ranking(
+    subsidy_cents: u64,
+    price_cents: u64,
+    budget_total_cents: u64,
+    budget_remaining_cents: u64,
+    relevance_score: f64,
+) -> (f64, AgentRankingSignals) {
+    let subsidy_score = ((subsidy_cents as f64) / (price_cents.max(1) as f64)).clamp(0.0, 1.0);
+    let budget_health_score = if budget_total_cents == 0 {
+        0.0
+    } else {
+        (budget_remaining_cents as f64 / budget_total_cents as f64).clamp(0.0, 1.0)
+    };
+    let relevance_score = relevance_score.clamp(0.0, 1.0);
+
+    let ranking_score =
+        (0.45 * subsidy_score + 0.35 * budget_health_score + 0.20 * relevance_score).clamp(0.0, 1.0);
+
+    (
+        ranking_score,
+        AgentRankingSignals {
+            subsidy_score,
+            budget_health_score,
+            relevance_score,
+        },
+    )
+}
+
+fn inferred_service_price_cents(service: &str) -> u64 {
+    // Keep this in sync with AppState::service_price for campaign-backed services.
+    match service {
+        "scraping" => 5,
+        "design" => 8,
+        "storage" => 3,
+        "data-tooling" => 4,
+        _ => DEFAULT_PRICE_CENTS,
+    }
+}
+
 async fn load_campaigns_from_db(state: &SharedState, sponsor_wallet_address: Option<&str>) -> ApiResult<Vec<Campaign>> {
     let db = {
         let state = state.inner.read().await;
@@ -585,6 +854,35 @@ async fn load_campaigns_from_db(state: &SharedState, sponsor_wallet_address: Opt
         .map_err(|err| ApiError::database(StatusCode::INTERNAL_SERVER_ERROR, err))?;
 
     Ok(campaigns)
+}
+
+async fn load_sponsored_apis_from_db(state: &SharedState) -> ApiResult<Vec<SponsoredApi>> {
+    let db = {
+        let state = state.inner.read().await;
+        state.db.clone()
+    }
+    .ok_or_else(|| ApiError::config("Postgres not configured; set DATABASE_URL"))?;
+
+    let api_rows = sqlx::query_as::<_, SponsoredApiRow>(
+        r#"
+        select id, name, sponsor, description, upstream_url, upstream_method,
+            upstream_headers, price_cents, budget_total_cents, budget_remaining_cents,
+            active, service_key, created_at
+        from sponsored_apis
+        order by created_at desc
+        "#,
+    )
+    .fetch_all(&db)
+    .await
+    .map_err(|err| ApiError::database(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+
+    let apis: Vec<SponsoredApi> = api_rows
+        .into_iter()
+        .map(SponsoredApi::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| ApiError::database(StatusCode::INTERNAL_SERVER_ERROR, err))?;
+
+    Ok(apis)
 }
 
 async fn complete_task(
