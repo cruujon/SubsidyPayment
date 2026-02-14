@@ -2369,7 +2369,7 @@ async fn well_known_openapi_yaml_returns_yaml_content() {
 fn openapi_yaml_file_exists_and_is_valid() {
     let yaml_content = include_str!("../openapi.yaml");
     assert!(yaml_content.contains("openapi:"), "should contain openapi version field");
-    assert!(yaml_content.contains("3.1.0"), "should be OpenAPI 3.1.0");
+    assert!(yaml_content.contains("3.0.0"), "should be OpenAPI 3.0.0");
     assert!(yaml_content.contains("/gpt/services"), "should define /gpt/services path");
     assert!(yaml_content.contains("/gpt/auth"), "should define /gpt/auth path");
     assert!(yaml_content.contains("/gpt/tasks/{campaign_id}"), "should define tasks path");
@@ -2380,7 +2380,7 @@ fn openapi_yaml_file_exists_and_is_valid() {
 
 // --- Task 8.4: Comprehensive OpenAPI schema validation ---
 
-/// Validates that openapi.yaml conforms to OpenAPI 3.1.0 and matches the actual implementation.
+/// Validates that openapi.yaml conforms to OpenAPI 3.0.0 and matches the actual implementation.
 /// Checks: version, paths, HTTP methods, operationIds, descriptions, parameters,
 /// request body fields, response schema properties, security scheme, and endpoint count.
 #[test]
@@ -2392,8 +2392,8 @@ fn openapi_schema_matches_implementation() {
     // --- 1. OpenAPI version ---
     assert_eq!(
         doc["openapi"].as_str().unwrap(),
-        "3.1.0",
-        "OpenAPI version must be 3.1.0"
+        "3.0.0",
+        "OpenAPI version must be 3.0.0"
     );
 
     // --- 2. Info section ---

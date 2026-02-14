@@ -1,4 +1,4 @@
-openapi: "3.1.0"
+openapi: "3.0.0"
 info:
   title: SubsidyPayment GPT Actions API
   description: >-
@@ -6,7 +6,7 @@ info:
     and execute paid services with sponsor subsidies.
   version: "1.0.0"
 servers:
-  - url: https://subsidypayment.example.com
+  - url: https://subsidypayment-gptintegration.onrender.com
     description: Production
 paths:
   /gpt/services:
@@ -40,7 +40,28 @@ paths:
                   services:
                     type: array
                     items:
-                      $ref: "#/components/schemas/GptServiceItem"
+                      type: object
+                      properties:
+                        service_type:
+                          type: string
+                          enum: [campaign, sponsored_api]
+                        service_id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        sponsor:
+                          type: string
+                        required_task:
+                          type: string
+                        subsidy_amount_cents:
+                          type: integer
+                        category:
+                          type: array
+                          items:
+                            type: string
+                        active:
+                          type: boolean
                   total_count:
                     type: integer
                   message:
