@@ -161,6 +161,10 @@ async fn main() {
 
 async fn serve_openapi_yaml() -> Response {
     let yaml = include_str!("../openapi.yaml");
+    let yaml = match std::env::var("PUBLIC_BASE_URL") {
+        Ok(base_url) => yaml.replace("https://subsidypayment.example.com", base_url.trim_end_matches('/')),
+        Err(_) => yaml.to_string(),
+    };
     (
         StatusCode::OK,
         [(header::CONTENT_TYPE, "text/yaml; charset=utf-8")],
