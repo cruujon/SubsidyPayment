@@ -640,10 +640,7 @@ async fn agent_discovery_services(
         let sponsored_apis = load_sponsored_apis_from_db(&state).await?;
 
         let q_filter = params.q.as_ref().map(|q| q.to_lowercase());
-        let capability_filter = params
-            .capability
-            .as_ref()
-            .map(|c| canonical_capability(c));
+        let capability_filter = params.capability.as_ref().map(|c| canonical_capability(c));
         let sponsor_filter = params.sponsor.as_ref().map(|s| s.to_lowercase());
         let max_price_cents = params.max_price_cents;
         let min_budget_remaining_cents = params.min_budget_remaining_cents;
@@ -886,7 +883,8 @@ fn build_agent_ranking(
     let relevance_score = relevance_score.clamp(0.0, 1.0);
 
     let ranking_score =
-        (0.45 * subsidy_score + 0.35 * budget_health_score + 0.20 * relevance_score).clamp(0.0, 1.0);
+        (0.45 * subsidy_score + 0.35 * budget_health_score + 0.20 * relevance_score)
+            .clamp(0.0, 1.0);
 
     (
         ranking_score,
