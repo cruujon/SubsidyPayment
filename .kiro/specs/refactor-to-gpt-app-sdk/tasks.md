@@ -8,11 +8,11 @@
 
 ### タスク1.1
 
-- [ ] `mcp-server/package.json` に依存関係（`@modelcontextprotocol/sdk`, `@modelcontextprotocol/ext-apps`, `express`, `cors`, `zod`, `pino`）と devDependencies（`typescript`, `tsx`, `vitest`, `vite`, `vite-plugin-singlefile`）を定義し、`build`、`start`、`dev`、`test` スクリプトを設定する。`mcp-server/tsconfig.json` を作成する。
+- [x] `mcp-server/package.json` に依存関係（`@modelcontextprotocol/sdk`, `@modelcontextprotocol/ext-apps`, `express`, `cors`, `zod`, `pino`）と devDependencies（`typescript`, `tsx`, `vitest`, `vite`, `vite-plugin-singlefile`）を定義し、`build`、`start`、`dev`、`test` スクリプトを設定する。`mcp-server/tsconfig.json` を作成する。
 
 ### タスク1.2
 
-- [ ] 環境変数を読み込んで `BackendConfig` 型として返す設定モジュール（`mcp-server/src/config.ts`）と、pino ベースの構造化 JSON ロガー（`mcp-server/src/logger.ts`）を実装する。`.env.example` に全環境変数（`PORT`, `RUST_BACKEND_URL`, `MCP_INTERNAL_API_KEY`, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `PUBLIC_URL`, `LOG_LEVEL`）を文書化する。
+- [x] 環境変数を読み込んで `BackendConfig` 型として返す設定モジュール（`mcp-server/src/config.ts`）と、pino ベースの構造化 JSON ロガー（`mcp-server/src/logger.ts`）を実装する。`.env.example` に全環境変数（`PORT`, `RUST_BACKEND_URL`, `MCP_INTERNAL_API_KEY`, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `PUBLIC_URL`, `LOG_LEVEL`）を文書化する。
 
 ---
 
@@ -20,7 +20,7 @@
 
 **対応要件**: 2.2, 5.4
 
-- [ ] Rust バックエンドのレスポンス型（`GptSearchResponse`, `GptAuthResponse`, `GptTaskResponse`, `GptCompleteTaskResponse`, `GptRunServiceResponse`, `GptUserStatusResponse`, `GptPreferencesResponse`, `GptSetPreferencesResponse`）に対応する TypeScript インターフェースを `mcp-server/src/types.ts` に定義する。リクエストパラメータ型、`BackendErrorResponse` 型、各ツールの Zod スキーマ定義で使用する入力型も含める。設計書コンポーネント7の型定義をそのまま実装する。
+- [x] Rust バックエンドのレスポンス型（`GptSearchResponse`, `GptAuthResponse`, `GptTaskResponse`, `GptCompleteTaskResponse`, `GptRunServiceResponse`, `GptUserStatusResponse`, `GptPreferencesResponse`, `GptSetPreferencesResponse`）に対応する TypeScript インターフェースを `mcp-server/src/types.ts` に定義する。リクエストパラメータ型、`BackendErrorResponse` 型、各ツールの Zod スキーマ定義で使用する入力型も含める。設計書コンポーネント7の型定義をそのまま実装する。
 
 ---
 
@@ -28,7 +28,7 @@
 
 **対応要件**: 1.3, 5.1, 5.3
 
-- [ ] `mcp-server/src/backend-client.ts` に `BackendClient` クラスを実装する。`Authorization: Bearer {mcpInternalApiKey}` ヘッダーを付与して Rust `/gpt/*` エンドポイント群（8メソッド: `searchServices`, `authenticateUser`, `getTaskDetails`, `completeTask`, `runService`, `getUserStatus`, `getPreferences`, `setPreferences`）に HTTP リクエストを送信する。Rust バックエンドが 4xx/5xx を返した場合のエラーハンドリング（`BackendErrorResponse` パース、ネットワークエラーの `backend_unavailable` 変換）を実装する。
+- [x] `mcp-server/src/backend-client.ts` に `BackendClient` クラスを実装する。`Authorization: Bearer {mcpInternalApiKey}` ヘッダーを付与して Rust `/gpt/*` エンドポイント群（8メソッド: `searchServices`, `authenticateUser`, `getTaskDetails`, `completeTask`, `runService`, `getUserStatus`, `getPreferences`, `setPreferences`）に HTTP リクエストを送信する。Rust バックエンドが 4xx/5xx を返した場合のエラーハンドリング（`BackendErrorResponse` パース、ネットワークエラーの `backend_unavailable` 変換）を実装する。
 
 ---
 
@@ -40,11 +40,11 @@ Express アプリケーションと MCP Streamable HTTP トランスポートを
 
 ### タスク4.1
 
-- [ ] `mcp-server/src/main.ts` に Express アプリケーションを作成する。CORS ミドルウェアで `chatgpt.com`、`cdn.oaistatic.com`、`web-sandbox.oaiusercontent.com` からのリクエストを許可する。`GET /health` でステータス・バージョン・uptime を返すヘルスチェックエンドポイントを実装する。`POST /mcp` でリクエストごとに `StreamableHTTPServerTransport` を生成し、`createServer()` で McpServer を初期化して接続する。
+- [x] `mcp-server/src/main.ts` に Express アプリケーションを作成する。CORS ミドルウェアで `chatgpt.com`、`cdn.oaistatic.com`、`web-sandbox.oaiusercontent.com` からのリクエストを許可する。`GET /health` でステータス・バージョン・uptime を返すヘルスチェックエンドポイントを実装する。`POST /mcp` でリクエストごとに `StreamableHTTPServerTransport` を生成し、`createServer()` で McpServer を初期化して接続する。
 
 ### タスク4.2
 
-- [ ] `mcp-server/src/server.ts` に `createServer(config)` 関数を実装する。`McpServer` インスタンスを生成し、`registerAllTools(server, config)` と `registerAllResources(server)` を呼び出して全ツール・リソースを登録する。ツール・リソースの登録関数はそれぞれ `tools/index.ts` と `widgets/index.ts` からインポートする。
+- [x] `mcp-server/src/server.ts` に `createServer(config)` 関数を実装する。`McpServer` インスタンスを生成し、`registerAllTools(server, config)` と `registerAllResources(server)` を呼び出して全ツール・リソースを登録する。ツール・リソースの登録関数はそれぞれ `tools/index.ts` と `widgets/index.ts` からインポートする。
 
 ---
 
@@ -56,23 +56,23 @@ Express アプリケーションと MCP Streamable HTTP トランスポートを
 
 ### タスク5.1
 
-- [ ] `mcp-server/src/tools/search-services.ts` に `search_services` ツールを実装する。`securitySchemes: [{ type: "noauth" }]` で認証不要に設定し、`readOnlyHint: true` とする。UIウィジェット紐付け（`_meta.ui.resourceUri`）を設定する。ツール登録の基本パターン（`registerAppTool` + Zod + annotations + 3パートレスポンス）をここで確立し、他ツールのテンプレートとする。
+- [x] `mcp-server/src/tools/search-services.ts` に `search_services` ツールを実装する。`securitySchemes: [{ type: "noauth" }]` で認証不要に設定し、`readOnlyHint: true` とする。UIウィジェット紐付け（`_meta.ui.resourceUri`）を設定する。ツール登録の基本パターン（`registerAppTool` + Zod + annotations + 3パートレスポンス）をここで確立し、他ツールのテンプレートとする。
 
 ### タスク5.2
 
-- [ ] `mcp-server/src/tools/authenticate-user.ts` に `authenticate_user` ツールを実装する。OAuth トークンの `email` を使用して `BackendClient.authenticateUser()` を呼び出し、`session_token` を `_meta` に格納する（モデルには渡さない）。認証情報が不足している場合の `_meta.mcp/www_authenticate` エラーレスポンスもここで実装する。
+- [x] `mcp-server/src/tools/authenticate-user.ts` に `authenticate_user` ツールを実装する。OAuth トークンの `email` を使用して `BackendClient.authenticateUser()` を呼び出し、`session_token` を `_meta` に格納する（モデルには渡さない）。認証情報が不足している場合の `_meta.mcp/www_authenticate` エラーレスポンスもここで実装する。
 
 ### タスク5.3
 
-- [ ] `mcp-server/src/tools/get-task-details.ts` と `mcp-server/src/tools/complete-task.ts` を実装する。`get_task_details` は `readOnlyHint: true` で task-form ウィジェットに紐付け、`complete_task` は同意情報（`consent` オブジェクト）を含むペイロードを送信する。両ツールとも認証済みの `session_token` を使用して Rust バックエンドを呼び出す。
+- [x] `mcp-server/src/tools/get-task-details.ts` と `mcp-server/src/tools/complete-task.ts` を実装する。`get_task_details` は `readOnlyHint: true` で task-form ウィジェットに紐付け、`complete_task` は同意情報（`consent` オブジェクト）を含むペイロードを送信する。両ツールとも認証済みの `session_token` を使用して Rust バックエンドを呼び出す。
 
 ### タスク5.4
 
-- [ ] `mcp-server/src/tools/run-service.ts` に `run_service` ツールを実装する。`openWorldHint: true` を設定する。レスポンスの `output` フィールド（大きなデータの可能性あり）を `_meta` に格納し、`structuredContent` には `service`, `payment_mode`, `sponsored_by`, `tx_hash` のみ含める。
+- [x] `mcp-server/src/tools/run-service.ts` に `run_service` ツールを実装する。`openWorldHint: true` を設定する。レスポンスの `output` フィールド（大きなデータの可能性あり）を `_meta` に格納し、`structuredContent` には `service`, `payment_mode`, `sponsored_by`, `tx_hash` のみ含める。
 
 ### タスク5.5
 
-- [ ] `mcp-server/src/tools/get-user-status.ts`、`mcp-server/src/tools/get-preferences.ts`、`mcp-server/src/tools/set-preferences.ts` を実装する。`get_user_status` は `readOnlyHint: true` で user-dashboard ウィジェットに紐付ける。`get_preferences` は `readOnlyHint: true`。`set_preferences` は preferences 配列を受け取り更新する。`mcp-server/src/tools/index.ts` に `registerAllTools()` を作成し、全8ツールを一括登録する関数をエクスポートする。
+- [x] `mcp-server/src/tools/get-user-status.ts`、`mcp-server/src/tools/get-preferences.ts`、`mcp-server/src/tools/set-preferences.ts` を実装する。`get_user_status` は `readOnlyHint: true` で user-dashboard ウィジェットに紐付ける。`get_preferences` は `readOnlyHint: true`。`set_preferences` は preferences 配列を受け取り更新する。`mcp-server/src/tools/index.ts` に `registerAllTools()` を作成し、全8ツールを一括登録する関数をエクスポートする。
 
 ---
 
