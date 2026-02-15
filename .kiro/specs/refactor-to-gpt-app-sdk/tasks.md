@@ -120,7 +120,7 @@ ChatGPT 内でレンダリングされる3つのリッチ UI ウィジェット�
 
 ### タスク7.5
 
-- [ ] `mcp-server/src/widgets/index.ts` に `registerAllResources()` 関数を実装する。`registerAppResource` で3ウィジェット（`services-list`, `task-form`, `user-dashboard`）を `text/html;profile=mcp-app` MIME タイプの MCP リソースとして登録する。ビルドされた HTML ファイルを `dist/widgets/` から読み込む。
+- [x] `mcp-server/src/widgets/index.ts` に `registerAllResources()` 関数を実装する。`registerAppResource` で3ウィジェット（`services-list`, `task-form`, `user-dashboard`）を `text/html;profile=mcp-app` MIME タイプの MCP リソースとして登録する。ビルドされた HTML ファイルを `dist/widgets/` から読み込む。
 
 ---
 
@@ -160,15 +160,15 @@ ChatGPT 内でレンダリングされる3つのリッチ UI ウィジェット�
 
 ### タスク10.1
 
-- [ ] `render.yaml` に MCP サーバーサービス（`subsidypayment-mcp`）の定義を追加する。ビルドコマンド（`cd mcp-server && npm ci && npm run build`）、起動コマンド（`cd mcp-server && npm start`）、環境変数（`RUST_BACKEND_URL`, `MCP_INTERNAL_API_KEY`, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `PUBLIC_URL`, `PORT`）を設定する。
+- [x] `render.yaml` に MCP サーバーサービス（`subsidypayment-mcp`）の定義を追加する。ビルドコマンド（`cd mcp-server && npm ci && npm run build`）、起動コマンド（`cd mcp-server && npm start`）、環境変数（`RUST_BACKEND_URL`, `MCP_INTERNAL_API_KEY`, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `PUBLIC_URL`, `PORT`）を設定する。
 
 ### タスク10.2
 
-- [ ] ChatGPT App Directory 提出用のメタデータ（アプリ名、説明文、カテゴリ、プライバシーポリシー URL、利用規約 URL、アイコン画像の仕様）を `mcp-server/app-metadata.json` に準備する。
+- [x] ChatGPT App Directory 提出用のメタデータ（アプリ名、説明文、カテゴリ、プライバシーポリシー URL、利用規約 URL、アイコン画像の仕様）を `mcp-server/app-metadata.json` に準備する。
 
 ### タスク10.3
 
-- [ ] Actions → Apps SDK 完全移行後の削除手順書を `mcp-server/docs/migration-guide.md` に作成する。削除対象（`openapi.yaml`、`/.well-known/openapi.yaml` エンドポイント、GPT Builder 設定）、移行確認チェックリスト、ロールバック手順を含める。
+- [x] Actions → Apps SDK 完全移行後の削除手順書を `mcp-server/docs/migration-guide.md` に作成する。削除対象（`openapi.yaml`、`/.well-known/openapi.yaml` エンドポイント、GPT Builder 設定）、移行確認チェックリスト、ロールバック手順を含める。
 
 ---
 
