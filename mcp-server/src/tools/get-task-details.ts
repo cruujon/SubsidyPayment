@@ -2,6 +2,7 @@ import { registerAppTool } from '@modelcontextprotocol/ext-apps/server';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
+import { TokenVerifier } from '../auth/token-verifier.ts';
 import { BackendClient, BackendClientError } from '../backend-client.ts';
 import type { BackendConfig } from '../config.ts';
 
@@ -35,8 +36,24 @@ function resolveSessionToken(input: { session_token?: string }, context: any): s
   return null;
 }
 
+function resolveBearerToken(context: any): string | null {
+  const authToken = context?.auth?.token ?? context?._meta?.auth?.token ?? null;
+  if (typeof authToken === 'string' && authToken.length > 0) {
+    return authToken;
+  }
+  const authorization = context?.headers?.authorization ?? context?._meta?.headers?.authorization ?? null;
+  if (typeof authorization === 'string' && authorization.startsWith('Bearer ')) {
+    return authorization.slice('Bearer '.length);
+  }
+  return null;
+}
+
 export function registerGetTaskDetailsTool(server: McpServer, config: BackendConfig): void {
   const client = new BackendClient(config);
+  const verifier = new TokenVerifier({
+    domain: config.auth0Domain,
+    audience: config.auth0Audience,
+  });
 
   registerAppTool(
     server,
@@ -58,6 +75,12 @@ export function registerGetTaskDetailsTool(server: McpServer, config: BackendCon
       },
     },
     async (input, context: any) => {
+      const bearerToken = resolveBearerToken(context);
+      const authInfo = bearerToken ? await verifier.verify(bearerToken) : null;
+      if (!authInfo) {
+        return unauthorizedSessionResponse(config.publicUrl);
+      }
+
       const sessionToken = resolveSessionToken(input, context);
       if (!sessionToken) {
         return unauthorizedSessionResponse(config.publicUrl);

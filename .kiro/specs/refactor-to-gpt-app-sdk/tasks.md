@@ -84,15 +84,15 @@ Auth0 を OAuth 2.1 認可サーバーとして統合し、トークン検証と
 
 ### タスク6.1
 
-- [ ] `mcp-server/src/auth/oauth-metadata.ts` に `GET /.well-known/oauth-protected-resource` エンドポイントのハンドラを実装する。`resource`（MCP サーバーの公開 URL）、`authorization_servers`（Auth0 ドメイン）、`scopes_supported` を返す。Auth0 が `/.well-known/oauth-authorization-server` を提供するため、必要に応じてプロキシまたはリダイレクトを設定する。
+- [x] `mcp-server/src/auth/oauth-metadata.ts` に `GET /.well-known/oauth-protected-resource` エンドポイントのハンドラを実装する。`resource`（MCP サーバーの公開 URL）、`authorization_servers`（Auth0 ドメイン）、`scopes_supported` を返す。Auth0 が `/.well-known/oauth-authorization-server` を提供するため、必要に応じてプロキシまたはリダイレクトを設定する。
 
 ### タスク6.2
 
-- [ ] `mcp-server/src/auth/token-verifier.ts` に `TokenVerifier` クラスを実装する。`jwks-rsa` で Auth0 の JWKS エンドポイントから公開鍵を取得し、`jsonwebtoken` で JWT の署名・有効期限・audience を検証する。検証成功時は `AuthInfo`（`sub`, `email`, `scopes`, `token`）を返し、失敗時は `null` を返す。
+- [x] `mcp-server/src/auth/token-verifier.ts` に `TokenVerifier` クラスを実装する。`jwks-rsa` で Auth0 の JWKS エンドポイントから公開鍵を取得し、`jsonwebtoken` で JWT の署名・有効期限・audience を検証する。検証成功時は `AuthInfo`（`sub`, `email`, `scopes`, `token`）を返し、失敗時は `null` を返す。
 
 ### タスク6.3
 
-- [ ] 認証が必要な7ツール（`authenticate_user`, `get_task_details`, `complete_task`, `run_service`, `get_user_status`, `get_preferences`, `set_preferences`）に `securitySchemes: [{ type: "oauth2" }]` を適用する。ツールハンドラの先頭で `TokenVerifier.verify()` を呼び出し、認証失敗時は `_meta["mcp/www_authenticate"]` ヘッダーを含む `isError: true` レスポンスを返すようにする。`search_services` は `noauth` を維持する。
+- [x] 認証が必要な7ツール（`authenticate_user`, `get_task_details`, `complete_task`, `run_service`, `get_user_status`, `get_preferences`, `set_preferences`）に `securitySchemes: [{ type: "oauth2" }]` を適用する。ツールハンドラの先頭で `TokenVerifier.verify()` を呼び出し、認証失敗時は `_meta["mcp/www_authenticate"]` ヘッダーを含む `isError: true` レスポンスを返すようにする。`search_services` は `noauth` を維持する。
 
 ---
 
@@ -104,19 +104,19 @@ ChatGPT 内でレンダリングされる3つのリッチ UI ウィジェット�
 
 ### タスク7.1
 
-- [ ] `mcp-server/vite.config.ts` に `vite-plugin-singlefile` を使用したウィジェットビルド設定を作成する。各ウィジェット HTML を自己完結型のインラインバンドルとしてビルドする。ウィジェット共通の初期化コード（`window.openai` ブリッジ取得、テーマ対応、ツール出力データ取得、状態復元、高さ通知）を共通 JS モジュールとして作成する。
+- [x] `mcp-server/vite.config.ts` に `vite-plugin-singlefile` を使用したウィジェットビルド設定を作成する。各ウィジェット HTML を自己完結型のインラインバンドルとしてビルドする。ウィジェット共通の初期化コード（`window.openai` ブリッジ取得、テーマ対応、ツール出力データ取得、状態復元、高さ通知）を共通 JS モジュールとして作成する。
 
 ### タスク7.2
 
-- [ ] `mcp-server/src/widgets/src/services-list.html` にサービス検索結果ウィジェットを実装する。`window.openai.toolOutput` から `structuredContent.services` を取得し、サービス名・スポンサー名・補助金額・カテゴリタグ・関連度スコアをカード形式で表示する。カード選択時に `callTool("get_task_details", { campaign_id })` を発火し、`setWidgetState` で選択状態を永続化する。ダーク/ライトモード対応の CSS を含める。
+- [x] `mcp-server/src/widgets/src/services-list.html` にサービス検索結果ウィジェットを実装する。`window.openai.toolOutput` から `structuredContent.services` を取得し、サービス名・スポンサー名・補助金額・カテゴリタグ・関連度スコアをカード形式で表示する。カード選択時に `callTool("get_task_details", { campaign_id })` を発火し、`setWidgetState` で選択状態を永続化する。ダーク/ライトモード対応の CSS を含める。
 
 ### タスク7.3
 
-- [ ] `mcp-server/src/widgets/src/task-form.html` にタスク完了フォームウィジェットを実装する。タスク説明テキスト、`task_input_format.required_fields` から生成される動的入力フィールド、3種の同意チェックボックス（データ共有・利用目的確認・連絡許可）、送信ボタンを配置する。送信時に `callTool("complete_task", { ... })` を発火する。`already_completed: true` の場合は完了済み表示を行う。
+- [x] `mcp-server/src/widgets/src/task-form.html` にタスク完了フォームウィジェットを実装する。タスク説明テキスト、`task_input_format.required_fields` から生成される動的入力フィールド、3種の同意チェックボックス（データ共有・利用目的確認・連絡許可）、送信ボタンを配置する。送信時に `callTool("complete_task", { ... })` を発火する。`already_completed: true` の場合は完了済み表示を行う。
 
 ### タスク7.4
 
-- [ ] `mcp-server/src/widgets/src/user-dashboard.html` にユーザーダッシュボードウィジェットを実装する。ユーザー情報セクション（email、登録日）、完了済みタスク一覧（テーブル形式）、利用可能サービス一覧（カード形式、ready 状態の「実行」ボタン付き）を表示する。「実行」ボタン押下時に `callTool("run_service", { service, input })` を発火する。
+- [x] `mcp-server/src/widgets/src/user-dashboard.html` にユーザーダッシュボードウィジェットを実装する。ユーザー情報セクション（email、登録日）、完了済みタスク一覧（テーブル形式）、利用可能サービス一覧（カード形式、ready 状態の「実行」ボタン付き）を表示する。「実行」ボタン押下時に `callTool("run_service", { service, input })` を発火する。
 
 ### タスク7.5
 

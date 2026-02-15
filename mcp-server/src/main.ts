@@ -2,6 +2,10 @@ import cors from 'cors';
 import express from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
+import {
+  oauthAuthorizationServerRedirectHandler,
+  oauthProtectedResourceHandler,
+} from './auth/oauth-metadata.ts';
 import { loadConfig } from './config.ts';
 import { logger } from './logger.ts';
 import { createServer } from './server.ts';
@@ -32,6 +36,9 @@ export function createApp() {
       uptime: process.uptime(),
     });
   });
+
+  app.get('/.well-known/oauth-protected-resource', oauthProtectedResourceHandler(config));
+  app.get('/.well-known/oauth-authorization-server', oauthAuthorizationServerRedirectHandler(config));
 
   app.post('/mcp', async (req, res) => {
     try {
