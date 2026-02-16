@@ -6,9 +6,9 @@ import { TokenVerifier } from '../auth/token-verifier.ts';
 import { BackendClient, BackendClientError } from '../backend-client.ts';
 import type { BackendConfig } from '../config.ts';
 
-const getUserStatusInputSchema = z.object({
+const getUserStatusInputSchema = {
   session_token: z.string().optional(),
-});
+};
 
 function unauthorizedSessionResponse(publicUrl: string) {
   return {

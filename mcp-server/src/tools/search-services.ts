@@ -6,12 +6,12 @@ import { BackendClient, BackendClientError } from '../backend-client.ts';
 import type { BackendConfig } from '../config.ts';
 import type { GptSearchResponse, SearchServicesParams } from '../types.ts';
 
-const searchServicesInputSchema = z.object({
+const searchServicesInputSchema = {
   q: z.string().optional(),
   category: z.string().optional(),
   max_budget_cents: z.number().int().nonnegative().optional(),
   intent: z.string().optional(),
-});
+};
 
 function toSearchServicesResult(response: GptSearchResponse) {
   return {

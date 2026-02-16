@@ -20,3 +20,4 @@
 * [Render Deploy Check](deployment/RENDER_DEPLOY_CHECK.md)
 * [Render Env Example](deployment/RENDER_ENV_EXAMPLE.md)
 * [Local Setup](deployment/SETUP.md)
+* [MCP Server Guide](mcp-server/README.md)

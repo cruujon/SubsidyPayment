@@ -6,7 +6,7 @@ import { TokenVerifier } from '../auth/token-verifier.ts';
 import { BackendClient, BackendClientError } from '../backend-client.ts';
 import type { BackendConfig } from '../config.ts';
 
-const setPreferencesInputSchema = z.object({
+const setPreferencesInputSchema = {
   session_token: z.string().optional(),
   preferences: z.array(
     z.object({
@@ -14,7 +14,7 @@ const setPreferencesInputSchema = z.object({
       level: z.enum(['preferred', 'neutral', 'avoided']),
     })
   ),
-});
+};
 
 function unauthorizedSessionResponse(publicUrl: string) {
   return {

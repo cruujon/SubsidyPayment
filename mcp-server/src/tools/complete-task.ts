@@ -7,7 +7,7 @@ import { BackendClient, BackendClientError } from '../backend-client.ts';
 import type { BackendConfig } from '../config.ts';
 import type { CompleteTaskInput } from '../types.ts';
 
-const completeTaskInputSchema = z.object({
+const completeTaskInputSchema = {
   campaign_id: z.string().uuid(),
   task_name: z.string(),
   details: z.string().optional(),
@@ -17,7 +17,7 @@ const completeTaskInputSchema = z.object({
     purpose_acknowledged: z.boolean(),
     contact_permission: z.boolean(),
   }),
-});
+};
 
 function unauthorizedSessionResponse(publicUrl: string) {
   return {

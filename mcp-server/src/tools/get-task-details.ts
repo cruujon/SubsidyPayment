@@ -6,10 +6,10 @@ import { TokenVerifier } from '../auth/token-verifier.ts';
 import { BackendClient, BackendClientError } from '../backend-client.ts';
 import type { BackendConfig } from '../config.ts';
 
-const getTaskDetailsInputSchema = z.object({
+const getTaskDetailsInputSchema = {
   campaign_id: z.string().uuid(),
   session_token: z.string().optional(),
-});
+};
 
 function unauthorizedSessionResponse(publicUrl: string) {
   return {

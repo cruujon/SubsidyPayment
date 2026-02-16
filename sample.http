@@ -1,0 +1,651 @@
+### ==========================================================
+### SubsidyPayment MCP Server - 動作確認用リクエスト集
+### ==========================================================
+### 使い方:
+###   1. VS Code 拡張 "REST Client" をインストール
+###   2. MCP サーバーを起動: cd mcp-server && npm run dev
+###   3. Rust バックエンドを起動: cargo run (localhost:3000)
+###   4. 各リクエストの "Send Request" をクリック
+###
+### 注意:
+###   このサーバーはリクエストごとに新しいインスタンスを生成する
+###   ステートレス構成のため、MCP ツール呼び出しには JSON-RPC バッチ
+###   リクエストで initialize + notifications/initialized + tools/call
+###   をまとめて送る必要があります。
+### ==========================================================
+
+### 変数定義
+@host = http://localhost:3001
+@backendHost = http://localhost:3000
+@contentType = application/json
+
+# 認証後に取得される値で置き換えてください
+@sessionToken = YOUR_SESSION_TOKEN
+@bearerToken = YOUR_OAUTH_BEARER_TOKEN
+@campaignId = 00000000-0000-0000-0000-000000000001
+
+
+### ==========================================================
+### 1. ヘルスチェック (非 MCP エンドポイント)
+### ==========================================================
+
+### MCP サーバー ヘルスチェック
+GET {{host}}/health
+
+### ==========================================================
+### 2. OAuth メタデータ (非 MCP エンドポイント)
+### ==========================================================
+
+### OAuth Protected Resource メタデータ
+GET {{host}}/.well-known/oauth-protected-resource
+
+###
+
+### OAuth Authorization Server メタデータ (Auth0 へリダイレクト)
+GET {{host}}/.well-known/oauth-authorization-server
+
+### ==========================================================
+### 3. MCP Initialize のみ (疎通確認)
+### ==========================================================
+
+### MCP Initialize 単体テスト
+POST {{host}}/mcp
+Content-Type: {{contentType}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2025-03-26",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "sample-http-client",
+      "version": "1.0.0"
+    }
+  }
+}
+
+### ==========================================================
+### 4. MCP ツール一覧取得 (バッチリクエスト)
+### ==========================================================
+
+### ツール一覧 (initialize + initialized + tools/list)
+POST {{host}}/mcp
+Content-Type: {{contentType}}
+
+[
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "sample-http-client",
+        "version": "1.0.0"
+      }
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "notifications/initialized"
+  },
+  {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/list",
+    "params": {}
+  }
+]
+
+### ==========================================================
+### 5. search_services (サービス検索) - 認証不要
+### ==========================================================
+
+### サービス検索 - クエリなし (全件)
+POST {{host}}/mcp
+Content-Type: {{contentType}}
+
+[
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "sample-http-client",
+        "version": "1.0.0"
+      }
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "notifications/initialized"
+  },
+  {
+    "jsonrpc": "2.0",
+    "id": 10,
+    "method": "tools/call",
+    "params": {
+      "name": "search_services",
+      "arguments": {}
+    }
+  }
+]
+
+###
+
+### サービス検索 - キーワード指定
+POST {{host}}/mcp
+Content-Type: {{contentType}}
+
+[
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "sample-http-client",
+        "version": "1.0.0"
+      }
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "notifications/initialized"
+  },
+  {
+    "jsonrpc": "2.0",
+    "id": 11,
+    "method": "tools/call",
+    "params": {
+      "name": "search_services",
+      "arguments": {
+        "q": "翻訳",
+        "category": "ai",
+        "max_budget_cents": 5000
+      }
+    }
+  }
+]
+
+###
+
+### サービス検索 - インテント指定
+POST {{host}}/mcp
+Content-Type: {{contentType}}
+
+[
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "sample-http-client",
+        "version": "1.0.0"
+      }
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "notifications/initialized"
+  },
+  {
+    "jsonrpc": "2.0",
+    "id": 12,
+    "method": "tools/call",
+    "params": {
+      "name": "search_services",
+      "arguments": {
+        "intent": "画像を生成したい"
+      }
+    }
+  }
+]
+
+### ==========================================================
+### 6. authenticate_user (ユーザー認証) - OAuth 必須
+### ==========================================================
+
+### ユーザー認証
+POST {{host}}/mcp
+Content-Type: {{contentType}}
+Authorization: Bearer {{bearerToken}}
+
+[
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "sample-http-client",
+        "version": "1.0.0"
+      }
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "notifications/initialized"
+  },
+  {
+    "jsonrpc": "2.0",
+    "id": 20,
+    "method": "tools/call",
+    "params": {
+      "name": "authenticate_user",
+      "arguments": {
+        "region": "jp",
+        "roles": ["user"],
+        "tools_used": ["search_services"]
+      }
+    }
+  }
+]
+
+### ==========================================================
+### 7. get_user_status (ユーザー状態確認)
+### ==========================================================
+
+### ユーザー状態確認
+POST {{host}}/mcp
+Content-Type: {{contentType}}
+Authorization: Bearer {{bearerToken}}
+
+[
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "sample-http-client",
+        "version": "1.0.0"
+      }
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "notifications/initialized"
+  },
+  {
+    "jsonrpc": "2.0",
+    "id": 30,
+    "method": "tools/call",
+    "params": {
+      "name": "get_user_status",
+      "arguments": {
+        "session_token": "{{sessionToken}}"
+      }
+    }
+  }
+]
+
+### ==========================================================
+### 8. get_task_details (タスク詳細取得)
+### ==========================================================
+
+### タスク詳細取得
+POST {{host}}/mcp
+Content-Type: {{contentType}}
+Authorization: Bearer {{bearerToken}}
+
+[
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "sample-http-client",
+        "version": "1.0.0"
+      }
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "notifications/initialized"
+  },
+  {
+    "jsonrpc": "2.0",
+    "id": 40,
+    "method": "tools/call",
+    "params": {
+      "name": "get_task_details",
+      "arguments": {
+        "campaign_id": "{{campaignId}}",
+        "session_token": "{{sessionToken}}"
+      }
+    }
+  }
+]
+
+### ==========================================================
+### 9. complete_task (タスク完了)
+### ==========================================================
+
+### タスク完了報告
+POST {{host}}/mcp
+Content-Type: {{contentType}}
+Authorization: Bearer {{bearerToken}}
+
+[
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "sample-http-client",
+        "version": "1.0.0"
+      }
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "notifications/initialized"
+  },
+  {
+    "jsonrpc": "2.0",
+    "id": 50,
+    "method": "tools/call",
+    "params": {
+      "name": "complete_task",
+      "arguments": {
+        "campaign_id": "{{campaignId}}",
+        "task_name": "survey_completion",
+        "details": "アンケート回答完了",
+        "session_token": "{{sessionToken}}",
+        "consent": {
+          "data_sharing_agreed": true,
+          "purpose_acknowledged": true,
+          "contact_permission": false
+        }
+      }
+    }
+  }
+]
+
+### ==========================================================
+### 10. run_service (サービス実行)
+### ==========================================================
+
+### サービス実行
+POST {{host}}/mcp
+Content-Type: {{contentType}}
+Authorization: Bearer {{bearerToken}}
+
+[
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "sample-http-client",
+        "version": "1.0.0"
+      }
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "notifications/initialized"
+  },
+  {
+    "jsonrpc": "2.0",
+    "id": 60,
+    "method": "tools/call",
+    "params": {
+      "name": "run_service",
+      "arguments": {
+        "service": "translation",
+        "input": "Hello, world!",
+        "session_token": "{{sessionToken}}"
+      }
+    }
+  }
+]
+
+### ==========================================================
+### 11. get_preferences (設定取得)
+### ==========================================================
+
+### ユーザー設定取得
+POST {{host}}/mcp
+Content-Type: {{contentType}}
+Authorization: Bearer {{bearerToken}}
+
+[
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "sample-http-client",
+        "version": "1.0.0"
+      }
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "notifications/initialized"
+  },
+  {
+    "jsonrpc": "2.0",
+    "id": 70,
+    "method": "tools/call",
+    "params": {
+      "name": "get_preferences",
+      "arguments": {
+        "session_token": "{{sessionToken}}"
+      }
+    }
+  }
+]
+
+### ==========================================================
+### 12. set_preferences (設定変更)
+### ==========================================================
+
+### ユーザー設定更新
+POST {{host}}/mcp
+Content-Type: {{contentType}}
+Authorization: Bearer {{bearerToken}}
+
+[
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "sample-http-client",
+        "version": "1.0.0"
+      }
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "notifications/initialized"
+  },
+  {
+    "jsonrpc": "2.0",
+    "id": 80,
+    "method": "tools/call",
+    "params": {
+      "name": "set_preferences",
+      "arguments": {
+        "session_token": "{{sessionToken}}",
+        "preferences": [
+          {
+            "task_type": "survey",
+            "level": "preferred"
+          },
+          {
+            "task_type": "ad_click",
+            "level": "avoided"
+          },
+          {
+            "task_type": "review",
+            "level": "neutral"
+          }
+        ]
+      }
+    }
+  }
+]
+
+### ==========================================================
+### 13. MCP リソース一覧取得
+### ==========================================================
+
+### リソース一覧
+POST {{host}}/mcp
+Content-Type: {{contentType}}
+
+[
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "sample-http-client",
+        "version": "1.0.0"
+      }
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "notifications/initialized"
+  },
+  {
+    "jsonrpc": "2.0",
+    "id": 90,
+    "method": "resources/list",
+    "params": {}
+  }
+]
+
+### ==========================================================
+### 14. Rust バックエンド直接アクセス (デバッグ用)
+### ==========================================================
+### MCP サーバーを介さず Rust バックエンドの API を直接叩く。
+### バックエンドの問題切り分けに使用。
+### ==========================================================
+
+### バックエンド - サービス検索
+GET {{backendHost}}/gpt/services?q=翻訳
+Authorization: Bearer YOUR_MCP_INTERNAL_API_KEY
+
+###
+
+### バックエンド - サービス検索 (全件)
+GET {{backendHost}}/gpt/services
+Authorization: Bearer YOUR_MCP_INTERNAL_API_KEY
+
+###
+
+### バックエンド - ユーザー認証
+POST {{backendHost}}/gpt/auth
+Content-Type: {{contentType}}
+Authorization: Bearer YOUR_MCP_INTERNAL_API_KEY
+
+{
+  "email": "test@example.com",
+  "region": "jp",
+  "roles": ["user"],
+  "tools_used": []
+}
+
+###
+
+### バックエンド - ユーザー状態確認
+GET {{backendHost}}/gpt/user/status?session_token={{sessionToken}}
+Authorization: Bearer YOUR_MCP_INTERNAL_API_KEY
+
+###
+
+### バックエンド - タスク詳細取得
+GET {{backendHost}}/gpt/tasks/{{campaignId}}?session_token={{sessionToken}}
+Authorization: Bearer YOUR_MCP_INTERNAL_API_KEY
+
+###
+
+### バックエンド - タスク完了
+POST {{backendHost}}/gpt/tasks/{{campaignId}}/complete
+Content-Type: {{contentType}}
+Authorization: Bearer YOUR_MCP_INTERNAL_API_KEY
+
+{
+  "task_name": "survey_completion",
+  "details": "テスト完了",
+  "session_token": "{{sessionToken}}",
+  "consent": {
+    "data_sharing_agreed": true,
+    "purpose_acknowledged": true,
+    "contact_permission": false
+  }
+}
+
+###
+
+### バックエンド - サービス実行
+POST {{backendHost}}/gpt/services/translation/run
+Content-Type: {{contentType}}
+Authorization: Bearer YOUR_MCP_INTERNAL_API_KEY
+
+{
+  "input": "Hello, world!",
+  "session_token": "{{sessionToken}}"
+}
+
+###
+
+### バックエンド - 設定取得
+GET {{backendHost}}/gpt/preferences?session_token={{sessionToken}}
+Authorization: Bearer YOUR_MCP_INTERNAL_API_KEY
+
+###
+
+### バックエンド - 設定更新
+POST {{backendHost}}/gpt/preferences
+Content-Type: {{contentType}}
+Authorization: Bearer YOUR_MCP_INTERNAL_API_KEY
+
+{
+  "session_token": "{{sessionToken}}",
+  "preferences": [
+    {
+      "task_type": "survey",
+      "level": "preferred"
+    }
+  ]
+}

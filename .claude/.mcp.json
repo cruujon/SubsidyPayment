@@ -19,8 +19,8 @@
       ]
     },
     "drawio": {
-      "command": "cmd",
-      "args": ["/c", "npx", "@drawio/mcp@latest"]
+      "command": "npx",
+      "args": ["-y", "@drawio/mcp@latest"]
     }
   }
 }

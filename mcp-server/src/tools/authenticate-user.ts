@@ -5,14 +5,13 @@ import { z } from 'zod';
 import { BackendClient, BackendClientError } from '../backend-client.ts';
 import { TokenVerifier } from '../auth/token-verifier.ts';
 import type { BackendConfig } from '../config.ts';
-import type { AuthenticateUserParams } from '../types.ts';
 
-const authenticateUserInputSchema = z.object({
+const authenticateUserInputSchema = {
   email: z.string().email().optional(),
   region: z.string().default('auto'),
   roles: z.array(z.string()).optional().default([]),
   tools_used: z.array(z.string()).optional().default([]),
-});
+};
 
 function unauthorizedAuthResponse(publicUrl: string) {
   return {
@@ -26,7 +25,7 @@ function unauthorizedAuthResponse(publicUrl: string) {
   };
 }
 
-function resolveOAuthEmail(input: AuthenticateUserParams, context: any): string | null {
+function resolveOAuthEmail(input: { email?: string }, context: any): string | null {
   const authEmail = context?.auth?.email ?? context?._meta?.auth?.email ?? null;
   if (typeof authEmail === 'string' && authEmail.length > 0) {
     return authEmail;
@@ -78,7 +77,7 @@ export function registerAuthenticateUserTool(server: McpServer, config: BackendC
         'openai/toolInvocation/invoked': '認証が完了しました',
       },
     },
-    async (input: AuthenticateUserParams, context: any) => {
+    async (input, context: any) => {
       const bearerToken = resolveBearerToken(context);
       const authInfo = bearerToken ? await verifier.verify(bearerToken) : null;
       if (!authInfo) {
