@@ -37,7 +37,7 @@ pub struct AppConfig {
     pub x402_pay_to: Option<String>,
     pub x402_asset: Option<String>,
     pub public_base_url: String,
-    pub gpt_actions_api_key: Option<String>,
+    pub mcp_internal_api_key: Option<String>,
     pub agent_discovery_api_key: Option<String>,
     pub agent_discovery_rate_limit_per_min: u32,
 }
@@ -66,7 +66,7 @@ impl AppConfig {
             x402_asset: std::env::var("X402_ASSET").ok(),
             public_base_url: std::env::var("PUBLIC_BASE_URL")
                 .unwrap_or_else(|_| DEFAULT_PUBLIC_BASE_URL.to_string()),
-            gpt_actions_api_key: std::env::var("GPT_ACTIONS_API_KEY").ok(),
+            mcp_internal_api_key: std::env::var("MCP_INTERNAL_API_KEY").ok(),
             agent_discovery_api_key: std::env::var("AGENT_DISCOVERY_API_KEY").ok(),
             agent_discovery_rate_limit_per_min: read_env_u64(
                 "AGENT_DISCOVERY_RATE_LIMIT_PER_MIN",

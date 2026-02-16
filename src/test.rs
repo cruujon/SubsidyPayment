@@ -531,30 +531,30 @@ fn consent_and_gpt_session_types_exist_and_are_constructible() {
 }
 
 #[test]
-fn app_config_has_gpt_actions_api_key_field() {
+fn app_config_has_mcp_internal_api_key_field() {
     // Test with env var unset: should be None
     unsafe {
-        std::env::remove_var("GPT_ACTIONS_API_KEY");
+        std::env::remove_var("MCP_INTERNAL_API_KEY");
     }
     let config = AppConfig::from_env();
     assert!(
-        config.gpt_actions_api_key.is_none(),
-        "gpt_actions_api_key should be None when env var is unset"
+        config.mcp_internal_api_key.is_none(),
+        "mcp_internal_api_key should be None when env var is unset"
     );
 
     // Test with env var set: should be Some
     unsafe {
-        std::env::set_var("GPT_ACTIONS_API_KEY", "test-secret-key");
+        std::env::set_var("MCP_INTERNAL_API_KEY", "test-secret-key");
     }
     let config = AppConfig::from_env();
     assert_eq!(
-        config.gpt_actions_api_key,
+        config.mcp_internal_api_key,
         Some("test-secret-key".to_string())
     );
 
     // Cleanup
     unsafe {
-        std::env::remove_var("GPT_ACTIONS_API_KEY");
+        std::env::remove_var("MCP_INTERNAL_API_KEY");
     }
 }
 
@@ -623,21 +623,21 @@ fn api_error_rate_limited_returns_429_with_retry_after_header() {
 }
 
 #[tokio::test]
-async fn verify_gpt_api_key_rejects_missing_header() {
+async fn verify_mcp_api_key_rejects_missing_header() {
     use axum::http::StatusCode;
     use axum::middleware;
 
     let (_, state) = test_app();
     {
         let mut s = state.inner.write().await;
-        s.config.gpt_actions_api_key = Some("test-secret".to_string());
+        s.config.mcp_internal_api_key = Some("test-secret".to_string());
     }
 
     let app = Router::new()
         .route("/gpt/test", axum::routing::get(|| async { "ok" }))
         .layer(middleware::from_fn_with_state(
             state.clone(),
-            gpt::verify_gpt_api_key,
+            gpt::verify_mcp_api_key,
         ))
         .with_state(state);
 
@@ -650,21 +650,21 @@ async fn verify_gpt_api_key_rejects_missing_header() {
 }
 
 #[tokio::test]
-async fn verify_gpt_api_key_rejects_wrong_key() {
+async fn verify_mcp_api_key_rejects_wrong_key() {
     use axum::http::StatusCode;
     use axum::middleware;
 
     let (_, state) = test_app();
     {
         let mut s = state.inner.write().await;
-        s.config.gpt_actions_api_key = Some("correct-key".to_string());
+        s.config.mcp_internal_api_key = Some("correct-key".to_string());
     }
 
     let app = Router::new()
         .route("/gpt/test", axum::routing::get(|| async { "ok" }))
         .layer(middleware::from_fn_with_state(
             state.clone(),
-            gpt::verify_gpt_api_key,
+            gpt::verify_mcp_api_key,
         ))
         .with_state(state);
 
@@ -678,21 +678,21 @@ async fn verify_gpt_api_key_rejects_wrong_key() {
 }
 
 #[tokio::test]
-async fn verify_gpt_api_key_passes_with_valid_key() {
+async fn verify_mcp_api_key_passes_with_valid_key() {
     use axum::http::StatusCode;
     use axum::middleware;
 
     let (_, state) = test_app();
     {
         let mut s = state.inner.write().await;
-        s.config.gpt_actions_api_key = Some("valid-key".to_string());
+        s.config.mcp_internal_api_key = Some("valid-key".to_string());
     }
 
     let app = Router::new()
         .route("/gpt/test", axum::routing::get(|| async { "ok" }))
         .layer(middleware::from_fn_with_state(
             state.clone(),
-            gpt::verify_gpt_api_key,
+            gpt::verify_mcp_api_key,
         ))
         .with_state(state);
 
@@ -717,22 +717,22 @@ fn resolve_session_has_correct_signature() {
 }
 
 #[tokio::test]
-async fn verify_gpt_api_key_passes_when_key_not_configured() {
+async fn verify_mcp_api_key_passes_when_key_not_configured() {
     use axum::http::StatusCode;
     use axum::middleware;
 
     let (_, state) = test_app();
-    // gpt_actions_api_key defaults to None — middleware should passthrough
+    // mcp_internal_api_key defaults to None — middleware should passthrough
     {
         let s = state.inner.read().await;
-        assert!(s.config.gpt_actions_api_key.is_none());
+        assert!(s.config.mcp_internal_api_key.is_none());
     }
 
     let app = Router::new()
         .route("/gpt/test", axum::routing::get(|| async { "ok" }))
         .layer(middleware::from_fn_with_state(
             state.clone(),
-            gpt::verify_gpt_api_key,
+            gpt::verify_mcp_api_key,
         ))
         .with_state(state);
 
@@ -745,21 +745,21 @@ async fn verify_gpt_api_key_passes_when_key_not_configured() {
 }
 
 #[tokio::test]
-async fn verify_gpt_api_key_rejects_invalid_bearer_format() {
+async fn verify_mcp_api_key_rejects_invalid_bearer_format() {
     use axum::http::StatusCode;
     use axum::middleware;
 
     let (_, state) = test_app();
     {
         let mut s = state.inner.write().await;
-        s.config.gpt_actions_api_key = Some("test-secret".to_string());
+        s.config.mcp_internal_api_key = Some("test-secret".to_string());
     }
 
     let app = Router::new()
         .route("/gpt/test", axum::routing::get(|| async { "ok" }))
         .layer(middleware::from_fn_with_state(
             state.clone(),
-            gpt::verify_gpt_api_key,
+            gpt::verify_mcp_api_key,
         ))
         .with_state(state);
 
@@ -2939,8 +2939,11 @@ async fn gpt_subrouter_does_not_break_existing_routes() {
 }
 
 // --- Task 7.2: OpenAPI schema tests ---
+// NOTE: GPT Actions (openapi.yaml) is deprecated in favor of GPT Apps SDK (MCP).
+// These tests are ignored but kept for reference.
 
 #[tokio::test]
+#[ignore = "GPT Actions deprecated - using MCP instead"]
 async fn well_known_openapi_yaml_returns_yaml_content() {
     let (app, _state) = test_app();
     let response = app
@@ -2999,6 +3002,7 @@ async fn well_known_openapi_yaml_returns_yaml_content() {
 }
 
 #[test]
+#[ignore = "GPT Actions deprecated - using MCP instead"]
 fn openapi_yaml_file_exists_and_is_valid() {
     let yaml_content = include_str!("../openapi.yaml");
     assert!(
@@ -3038,6 +3042,7 @@ fn openapi_yaml_file_exists_and_is_valid() {
 /// Checks: version, paths, HTTP methods, operationIds, descriptions, parameters,
 /// request body fields, response schema properties, security scheme, and endpoint count.
 #[test]
+#[ignore = "GPT Actions deprecated - using MCP instead"]
 fn openapi_schema_matches_implementation() {
     let yaml_content = include_str!("../openapi.yaml");
     let doc: serde_yaml::Value =
@@ -3372,6 +3377,7 @@ fn openapi_schema_matches_implementation() {
 /// - Authentication scheme is configured for Bearer
 /// - Server URL is defined
 #[tokio::test]
+#[ignore = "GPT Actions deprecated - using MCP instead"]
 async fn gpt_builder_preflight_all_prerequisites_met() {
     let (app, _state) = test_app();
 
@@ -3500,6 +3506,7 @@ async fn gpt_builder_preflight_all_prerequisites_met() {
 /// Validates that the OpenAPI schema served at runtime matches the file on disk.
 /// This ensures no drift between the source file and what GPT Builder would import.
 #[tokio::test]
+#[ignore = "GPT Actions deprecated - using MCP instead"]
 async fn gpt_builder_served_schema_matches_source_file() {
     let (app, _state) = test_app();
 
@@ -3607,11 +3614,11 @@ fn privacy_html_file_exists_and_has_structure() {
 // --- Task 7.4: .env.example test ---
 
 #[test]
-fn env_example_contains_gpt_actions_api_key() {
+fn env_example_contains_mcp_internal_api_key() {
     let content = include_str!("../.env.example");
     assert!(
-        content.contains("GPT_ACTIONS_API_KEY"),
-        ".env.example should contain GPT_ACTIONS_API_KEY"
+        content.contains("MCP_INTERNAL_API_KEY"),
+        ".env.example should contain MCP_INTERNAL_API_KEY"
     );
     assert!(
         content.contains("DATABASE_URL"),
@@ -3629,7 +3636,7 @@ async fn gpt_auth_middleware_rejects_without_api_key_when_configured() {
     // Configure an API key
     {
         let mut s = state.inner.write().await;
-        s.config.gpt_actions_api_key = Some("test-secret-key".to_string());
+        s.config.mcp_internal_api_key = Some("test-secret-key".to_string());
     }
 
     let app = build_app(state, DEFAULT_AGENT_DISCOVERY_RATE_LIMIT_PER_MIN as u32);
@@ -3660,7 +3667,7 @@ async fn gpt_auth_middleware_rejects_invalid_api_key() {
     };
     {
         let mut s = state.inner.write().await;
-        s.config.gpt_actions_api_key = Some("correct-key".to_string());
+        s.config.mcp_internal_api_key = Some("correct-key".to_string());
     }
 
     let app = build_app(state, DEFAULT_AGENT_DISCOVERY_RATE_LIMIT_PER_MIN as u32);
@@ -3690,7 +3697,7 @@ async fn gpt_auth_middleware_accepts_valid_api_key() {
     };
     {
         let mut s = state.inner.write().await;
-        s.config.gpt_actions_api_key = Some("correct-key".to_string());
+        s.config.mcp_internal_api_key = Some("correct-key".to_string());
     }
 
     let app = build_app(state, DEFAULT_AGENT_DISCOVERY_RATE_LIMIT_PER_MIN as u32);
@@ -3724,8 +3731,8 @@ async fn gpt_auth_middleware_skips_when_no_key_configured() {
     {
         let s = state.inner.read().await;
         assert!(
-            s.config.gpt_actions_api_key.is_none()
-                || s.config.gpt_actions_api_key.as_deref() == Some("")
+            s.config.mcp_internal_api_key.is_none()
+                || s.config.mcp_internal_api_key.as_deref() == Some("")
         );
     }
 
@@ -3757,28 +3764,13 @@ async fn static_endpoints_not_behind_gpt_auth() {
     };
     {
         let mut s = state.inner.write().await;
-        s.config.gpt_actions_api_key = Some("secret-key".to_string());
+        s.config.mcp_internal_api_key = Some("secret-key".to_string());
     }
 
     let app = build_app(state, DEFAULT_AGENT_DISCOVERY_RATE_LIMIT_PER_MIN as u32);
 
-    // OpenAPI endpoint should NOT require API key (not under /gpt prefix)
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/.well-known/openapi.yaml")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(
-        response.status().as_u16(),
-        200,
-        "openapi.yaml should not require auth"
-    );
+    // NOTE: OpenAPI endpoint test removed - GPT Actions deprecated in favor of MCP
+    // The /.well-known/openapi.yaml endpoint has been removed from the router
 
     // Privacy endpoint should NOT require API key
     let response = app
@@ -3825,7 +3817,7 @@ async fn gpt_handlers_record_metrics_with_gpt_prefix() {
     // Disable API key requirement so requests pass through auth middleware
     {
         let mut s = state.inner.write().await;
-        s.config.gpt_actions_api_key = None;
+        s.config.mcp_internal_api_key = None;
     }
 
     // GET /gpt/services — should record metric for "gpt_search_services"
@@ -3865,7 +3857,7 @@ async fn gpt_all_endpoints_record_distinct_metrics() {
 
     {
         let mut s = state.inner.write().await;
-        s.config.gpt_actions_api_key = None;
+        s.config.mcp_internal_api_key = None;
     }
 
     // Hit all 6 GPT endpoints (they'll return errors without DB, but metrics should record)
@@ -4648,7 +4640,7 @@ async fn gpt_preferences_behind_auth_middleware() {
     };
     {
         let mut s = state.inner.write().await;
-        s.config.gpt_actions_api_key = Some("pref-test-key".to_string());
+        s.config.mcp_internal_api_key = Some("pref-test-key".to_string());
     }
     let app = build_app(state, DEFAULT_AGENT_DISCOVERY_RATE_LIMIT_PER_MIN as u32);
 
@@ -4696,7 +4688,7 @@ async fn gpt_preferences_endpoints_record_metrics() {
     let (app, state) = test_app();
     {
         let mut s = state.inner.write().await;
-        s.config.gpt_actions_api_key = None;
+        s.config.mcp_internal_api_key = None;
     }
 
     // Hit GET /gpt/preferences
@@ -6045,23 +6037,8 @@ async fn preferences_route_does_not_break_existing_routes() {
         "/gpt/auth should still be reachable"
     );
 
-    // /.well-known/openapi.yaml should still work
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/.well-known/openapi.yaml")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(
-        response.status().as_u16(),
-        200,
-        "/.well-known/openapi.yaml should still return 200"
-    );
+    // NOTE: /.well-known/openapi.yaml endpoint removed - GPT Actions deprecated
+    // (GPT Apps SDK / MCP is now used instead)
 }
 
 // =============================================================================
@@ -6069,6 +6046,7 @@ async fn preferences_route_does_not_break_existing_routes() {
 // =============================================================================
 
 #[tokio::test]
+#[ignore = "GPT Actions deprecated - using MCP instead"]
 async fn openapi_schema_contains_new_parameters() {
     let (app, _state) = test_app();
     let response = app
@@ -6125,6 +6103,7 @@ async fn openapi_schema_contains_new_parameters() {
 }
 
 #[tokio::test]
+#[ignore = "GPT Actions deprecated - using MCP instead"]
 async fn openapi_schema_contains_preferences_endpoints() {
     let (app, _state) = test_app();
     let response = app
@@ -6158,6 +6137,7 @@ async fn openapi_schema_contains_preferences_endpoints() {
 }
 
 #[tokio::test]
+#[ignore = "GPT Actions deprecated - using MCP instead"]
 async fn openapi_schema_endpoint_count_within_limit() {
     let (app, _state) = test_app();
     let response = app
@@ -6189,6 +6169,7 @@ async fn openapi_schema_endpoint_count_within_limit() {
 }
 
 #[tokio::test]
+#[ignore = "GPT Actions deprecated - using MCP instead"]
 async fn openapi_schema_has_all_expected_operation_ids() {
     let (app, _state) = test_app();
     let response = app

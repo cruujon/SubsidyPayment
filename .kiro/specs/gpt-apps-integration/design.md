@@ -92,7 +92,7 @@
 | 境界 | 内側 | 外側 | インターフェース |
 |---|---|---|---|
 | GPTサブルーター | GPT専用ハンドラ、認証、レート制限 | 既存ルート | `Router::nest("/gpt", ...)` |
-| 認証境界 | GPTルート全体 | 公開ルート（health, well-known等） | `verify_gpt_api_key` ミドルウェア |
+| 認証境界 | GPTルート全体 | 公開ルート（health, well-known等） | `verify_mcp_api_key` ミドルウェア |
 | データ境界 | 同意済みデータのみスポンサーに転送 | 未同意データ | `consents` テーブル参照 |
 
 ---
@@ -129,8 +129,8 @@
 
 ```rust
 /// GPT Actions APIキー認証ミドルウェア
-/// 環境変数 GPT_ACTIONS_API_KEY と照合
-async fn verify_gpt_api_key(
+/// 環境変数 MCP_INTERNAL_API_KEY と照合
+async fn verify_mcp_api_key(
     headers: HeaderMap,
     request: axum::extract::Request,
     next: axum::middleware::Next,
@@ -144,8 +144,8 @@ async fn verify_gpt_api_key(
 - 検証成功 → `next.run(request).await` で後続ハンドラに委譲
 
 **設定**:
-- 環境変数: `GPT_ACTIONS_API_KEY` — GPT Builder UIに設定するAPIキー
-- `AppConfig` に `gpt_actions_api_key: Option<String>` フィールドを追加
+- 環境変数: `MCP_INTERNAL_API_KEY` — GPT Builder UIに設定するAPIキー
+- `AppConfig` に `mcp_internal_api_key: Option<String>` フィールドを追加
 
 ---
 
@@ -806,7 +806,7 @@ impl ApiError {
 | `src/main.rs` | `mod gpt;` 追加、GPTサブルーター組み込み、静的ファイル配信ルート追加 |
 | `src/types.rs` | GPT用リクエスト/レスポンス型、`Consent` 型、`AppConfig` にAPIキーフィールド追加 |
 | `src/error.rs` | `ApiError::unauthorized()`, `ApiError::rate_limited()` メソッド追加 |
-| `.env.example` | `GPT_ACTIONS_API_KEY` 追加 |
+| `.env.example` | `MCP_INTERNAL_API_KEY` 追加 |
 
 ### 新規マイグレーション
 
@@ -860,7 +860,7 @@ impl ApiError {
 
 | 項目 | 対策 |
 |---|---|
-| APIキー管理 | 環境変数 `GPT_ACTIONS_API_KEY` で管理。ハードコード禁止 |
+| APIキー管理 | 環境変数 `MCP_INTERNAL_API_KEY` で管理。ハードコード禁止 |
 | ユーザー識別 | セッショントークン方式を採用。`user_id` を直接受け取らず、サーバー発行の `session_token` から `resolve_session()` で解決。なりすまし・データ閲覧を防止 |
 | セッション有効期限 | 30日間。期限切れトークンは401を返し再認証を促す |
 | レート制限 | GPTルートに60 req/minのカスタムトークンバケットを適用。超過時は429 + Retry-After |

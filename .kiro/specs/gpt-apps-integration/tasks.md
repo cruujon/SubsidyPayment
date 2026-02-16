@@ -24,8 +24,8 @@
 - [x] 1.6: `Consent` 型と `GptSession` 型を `src/types.rs` に追加する
   設計書コンポーネント8と1.5で定義された `Consent` 型（sqlx::FromRow付き）と `GptSession` 型を追加する。
 
-- [x] 1.7: `AppConfig` に `gpt_actions_api_key` フィールドを追加する
-  `src/types.rs` の `AppConfig` 構造体に `gpt_actions_api_key: Option<String>` を追加し、`AppConfig::from_env()` で `GPT_ACTIONS_API_KEY` 環境変数から読み込むようにする。
+- [x] 1.7: `AppConfig` に `mcp_internal_api_key` フィールドを追加する
+  `src/types.rs` の `AppConfig` 構造体に `mcp_internal_api_key: Option<String>` を追加し、`AppConfig::from_env()` で `MCP_INTERNAL_API_KEY` 環境変数から読み込むようにする。
 
 - [x] 1.8: `UserProfile` に `source` フィールドを追加する
   `src/types.rs` の `UserProfile` 構造体に `source: Option<String>` フィールドを追加し、既存のSQLクエリとの後方互換性を確認する。
@@ -53,7 +53,7 @@ APIキー検証ミドルウェアとセッショントークン解決ユーテ�
 ### 要件カバレッジ: 3.2, 3.3, 8.3
 
 - [x] 3.1: `src/gpt.rs` モジュールを新設し、APIキー認証ミドルウェアを実装する
-  `src/gpt.rs` を作成し、`verify_gpt_api_key` ミドルウェア関数を実装する。`Authorization: Bearer <key>` ヘッダーを `AppConfig.gpt_actions_api_key` と照合し、不一致時は `ApiError::unauthorized()` を返す。`src/main.rs` に `mod gpt;` を追加する。
+  `src/gpt.rs` を作成し、`verify_mcp_api_key` ミドルウェア関数を実装する。`Authorization: Bearer <key>` ヘッダーを `AppConfig.mcp_internal_api_key` と照合し、不一致時は `ApiError::unauthorized()` を返す。`src/main.rs` に `mod gpt;` を追加する。
 
 - [x] 3.2: `resolve_session()` ユーティリティを `src/gpt.rs` に実装する
   セッショントークン（UUID）を受け取り、`gpt_sessions` テーブルから有効期限内のレコードを検索して `user_id` を返す関数を実装する。トークンが無効または期限切れの場合は `ApiError::unauthorized("invalid or expired session token")` を返す。
@@ -132,8 +132,8 @@ GPTサブルーターを既存のAxumアプリに組み込み、OpenAPIスキー
 - [x] 7.3: プライバシーポリシーページを作成し配信エンドポイントを追加する
   プロジェクトルートに `privacy.html` を作成する。設計書コンポーネント11の内容（サービス概要、収集データ、利用目的、共有条件、保持期間、ユーザー権利、連絡先）を含める。`GET /privacy` エンドポイントを `build_app()` に追加してHTMLを配信する。
 
-- [x] 7.4: `.env.example` に `GPT_ACTIONS_API_KEY` を追加する
-  `.env.example` ファイルに `GPT_ACTIONS_API_KEY` 環境変数の説明とサンプル値を追加する。
+- [x] 7.4: `.env.example` に `MCP_INTERNAL_API_KEY` を追加する
+  `.env.example` ファイルに `MCP_INTERNAL_API_KEY` 環境変数の説明とサンプル値を追加する。
 
 - [x] 7.5: ルーター統合の統合テストを追加する
   GPTサブルーターへのリクエストが認証ミドルウェアを通過すること、`/.well-known/openapi.yaml` と `/privacy` が正しいContent-Typeで応答すること、既存ルートが影響を受けないことをテストする。

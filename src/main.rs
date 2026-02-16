@@ -47,7 +47,7 @@ fn build_gpt_router(state: SharedState) -> Router<SharedState> {
         )
         .layer(axum::middleware::from_fn_with_state(
             state,
-            gpt::verify_gpt_api_key,
+            gpt::verify_mcp_api_key,
         ))
         .layer(axum::middleware::from_fn_with_state(
             limiter,
@@ -146,7 +146,6 @@ fn build_app(state: SharedState, agent_discovery_limit_per_min: u32) -> Router {
         .route("/creator/metrics/event", post(record_creator_metric_event))
         .route("/creator/metrics", get(creator_metrics))
         .route("/metrics", get(prometheus_metrics))
-        .route("/.well-known/openapi.yaml", get(serve_openapi_yaml))
         .route("/privacy", get(serve_privacy_page))
         .nest("/gpt", build_gpt_router(state.clone()))
         .layer(cors_layer_from_env())
@@ -262,22 +261,6 @@ async fn main() {
     if let Err(err) = axum::serve(listener, app).await {
         eprintln!("server error: {err}");
     }
-}
-
-async fn serve_openapi_yaml() -> Response {
-    let yaml = include_str!("../openapi.yaml");
-    let public_base_url =
-        std::env::var("PUBLIC_BASE_URL").unwrap_or_else(|_| DEFAULT_PUBLIC_BASE_URL.to_string());
-    let yaml = yaml.replace(
-        "https://subsidypayment.example.com",
-        public_base_url.trim_end_matches('/'),
-    );
-    (
-        StatusCode::OK,
-        [(header::CONTENT_TYPE, "text/yaml; charset=utf-8")],
-        yaml,
-    )
-        .into_response()
 }
 
 async fn serve_privacy_page() -> Response {

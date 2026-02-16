@@ -74,7 +74,7 @@
 │  │  Rust/Axum Backend (既存・変更最小)                      │  │
 │  │  ┌───────────────────────────────────────────────────┐  │  │
 │  │  │  /gpt/* サブルーター                               │  │  │
-│  │  │  verify_gpt_api_key ミドルウェア（内部通信認証）      │  │  │
+│  │  │  verify_mcp_api_key ミドルウェア（内部通信認証）      │  │  │
 │  │  │  rate_limit_middleware（60 req/min）                │  │  │
 │  │  │  8 ハンドラ（ビジネスロジック変更なし）               │  │  │
 │  │  └───────────────────────────────────────────────────┘  │  │
@@ -125,7 +125,7 @@
 |---|---|---|---|
 | バックエンド言語 | Rust (Axum 0.8) | TypeScript (Express) | ⚠️ 異なるが HTTP で疎結合 |
 | DB | PostgreSQL (SQLx) | 直接アクセスなし | ✅ Rust 経由のみ |
-| 認証 | GPT_ACTIONS_API_KEY | OAuth 2.1 (Auth0) + 内部 API キー | ✅ レイヤー分離 |
+| 認証 | MCP_INTERNAL_API_KEY | OAuth 2.1 (Auth0) + 内部 API キー | ✅ レイヤー分離 |
 | デプロイ | Render | Render（新サービス追加） | ✅ 同一プラットフォーム |
 | フロントエンド | React + Vite | Vite（ウィジェットビルド） | ✅ ビルドツール共通 |
 | メトリクス | Prometheus 0.14 | pino ログ → Render ログ | ⚠️ 段階的統合 |
@@ -199,7 +199,7 @@
 interface BackendConfig {
   /** Rust バックエンドの URL (例: https://subsidypayment.onrender.com) */
   rustBackendUrl: string;
-  /** MCP→Rust 内部通信用 API キー (= GPT_ACTIONS_API_KEY) */
+  /** MCP→Rust 内部通信用 API キー (= MCP_INTERNAL_API_KEY) */
   mcpInternalApiKey: string;
   /** Auth0 ドメイン (例: your-tenant.auth0.com) */
   auth0Domain: string;
@@ -1036,7 +1036,7 @@ mcp-server/
 | 項目 | 対策 |
 |---|---|
 | OAuth トークン検証 | Auth0 JWKS エンドポイントから公開鍵を取得し、署名・有効期限・audience を検証 |
-| MCP→Rust 内部通信 | `MCP_INTERNAL_API_KEY`（= `GPT_ACTIONS_API_KEY`）による Bearer 認証。環境変数管理 |
+| MCP→Rust 内部通信 | `MCP_INTERNAL_API_KEY`（= `MCP_INTERNAL_API_KEY`）による Bearer 認証。環境変数管理 |
 | session_token の漏洩防止 | `_meta` に格納しモデルには渡さない。ウィジェット専用 |
 | 入力バリデーション | Zod スキーマによるツール入力の厳格な検証 |
 | CORS | `chatgpt.com`, `cdn.oaistatic.com`, `web-sandbox.oaiusercontent.com` のみ許可 |
@@ -1081,7 +1081,7 @@ mcp-server/
 - 新しい GPT App（MCP）は別個のエントリとして ChatGPT に追加
 - データベーススキーマは一切変更なし
 - `openapi.yaml` と `/.well-known/openapi.yaml` は移行完了まで維持
-- `verify_gpt_api_key` ミドルウェアは MCP 内部通信認証としても機能
+- `verify_mcp_api_key` ミドルウェアは MCP 内部通信認証としても機能
 
 ---
 

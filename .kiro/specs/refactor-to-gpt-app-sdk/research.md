@@ -58,11 +58,11 @@ ChatGPT Actions（OpenAPI）から OpenAI Apps SDK（MCP）への移行に関す
 - 8つのハンドラすべてが JSON レスポンスを返し、`structuredContent` として直接利用可能
 - `message` フィールドが全レスポンスに存在し、MCP `content` テキストに転用可能
 - `GptRunServiceResponse.output` は大きくなる可能性があり、`_meta` に移動すべき
-- `verify_gpt_api_key` ミドルウェアは MCP→Rust 内部通信認証としてそのまま利用可能
+- `verify_mcp_api_key` ミドルウェアは MCP→Rust 内部通信認証としてそのまま利用可能
 - `resolve_session` は OAuth トークンの `sub` → email → user_id の新フローに置換可能
 - `ApiError` は7バリアントのenum で、MCP エラーレスポンスへの変換が明確
 
-**設計への影響**: Rust 側の変更は最小限。MCP→Rust 通信は既存 `GPT_ACTIONS_API_KEY` で認証。
+**設計への影響**: Rust 側の変更は最小限。MCP→Rust 通信は既存 `MCP_INTERNAL_API_KEY` で認証。
 
 ### トピック5: デプロイ戦略
 
@@ -95,7 +95,7 @@ ChatGPT Actions（OpenAPI）から OpenAI Apps SDK（MCP）への移行に関す
 | MCPサーバー言語 | TypeScript (Node.js) | ext-apps SDK 公式サポート、型安全 |
 | OAuth プロバイダー | Auth0 | openai-mcpkit scaffold、DCR 成熟、実績豊富 |
 | session_token の扱い | ハイブリッド（OAuth優先、フォールバックあり） | 移行期間中の後方互換性確保 |
-| MCP→Rust 認証 | 既存 GPT_ACTIONS_API_KEY | 追加実装不要、十分なセキュリティ |
+| MCP→Rust 認証 | 既存 MCP_INTERNAL_API_KEY | 追加実装不要、十分なセキュリティ |
 | ウィジェット技術 | バニラ HTML/JS/CSS + Vite バンドル | 非ゴールで React 除外、シンプル |
 | デプロイ先 | Render | 既存インフラとの一致、常時起動 |
 | 移行方式 | 別個 GPT App として並行運用 | Actions/Apps 共存不可の制約 |

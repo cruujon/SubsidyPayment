@@ -111,7 +111,7 @@
 | 項目 | 既存 | Agent追加分 | 整合性 |
 |---|---|---|---|
 | Web フレームワーク | Axum 0.8 | Axum 0.8（サブルーター追加） | ✅ 完全整合 |
-| 認証 | `verify_gpt_api_key` | 同パターンで `verify_agent_api_key` | ✅ 完全整合 |
+| 認証 | `verify_mcp_api_key` | 同パターンで `verify_agent_api_key` | ✅ 完全整合 |
 | レート制限 | グローバル `RateLimiter` | セッション単位 `HashMap<Uuid, RateLimiter>` | ✅ パターン拡張 |
 | DB | PostgreSQL + SQLx 0.8 | 同一DB、マイグレーション追加 | ✅ 完全整合 |
 | シリアライズ | Serde | 同一 | ✅ 完全整合 |
