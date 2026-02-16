@@ -17,6 +17,8 @@ services:
         sync: false
       - key: AGENT_DISCOVERY_API_KEY
         sync: false
+      - key: GPT_SESSION_REQUIRED
+        sync: false
     healthCheckPath: /health
     plan: free
     branch: deploy-test
