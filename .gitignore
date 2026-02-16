@@ -1,0 +1,9 @@
+/target
+.DS_Store
+node_modules/
+**/node_modules/
+frontend/dist
+docs/_book
+*.log
+.env
+.env.local

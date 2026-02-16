@@ -1,0 +1,773 @@
+openapi: "3.1.0"
+info:
+  title: SubsidyPayment GPT Actions API
+  description: >-
+    Search for sponsor-backed x402 services, complete required tasks,
+    and execute paid services with sponsor subsidies.
+  version: "1.0.0"
+servers:
+  - url: https://subsidypayment.example.com
+    description: Production
+paths:
+  /agent/discovery/services:
+    get:
+      operationId: discoverAgentServices
+      summary: Discover ranked services for agents (Claude/GPT/Open agents)
+      description: >-
+        Returns a unified discovery index across campaign-backed services and
+        sponsored APIs with ranking signals. This endpoint is intended for
+        agent routing and default service selection.
+      security:
+        - ApiKeyAuth: []
+        - {}
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Keyword against name, sponsor, capability, required task
+        - name: capability
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Exact capability/service key filter (e.g. scraping)
+        - name: sponsor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Case-insensitive sponsor filter
+        - name: max_price_cents
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+          description: Maximum allowed per-call price in cents
+        - name: min_budget_remaining_cents
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+          description: Minimum remaining sponsor budget in cents
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          description: Number of top-ranked rows to return (default 25)
+      responses:
+        "200":
+          description: Ranked service discovery response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDiscoveryResponse"
+        "500":
+          description: Internal server error
+
+  /claude/discovery/services:
+    get:
+      operationId: discoverClaudeServices
+      summary: Claude alias for agent service discovery
+      description: Alias of `/agent/discovery/services`.
+      security:
+        - ApiKeyAuth: []
+        - {}
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: capability
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: sponsor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: max_price_cents
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+        - name: min_budget_remaining_cents
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Ranked service discovery response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDiscoveryResponse"
+        "500":
+          description: Internal server error
+
+  /openclaw/discovery/services:
+    get:
+      operationId: discoverOpenclawServices
+      summary: Openclaw alias for agent service discovery
+      description: Alias of `/agent/discovery/services`.
+      security:
+        - ApiKeyAuth: []
+        - {}
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: capability
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: sponsor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: max_price_cents
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+        - name: min_budget_remaining_cents
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Ranked service discovery response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDiscoveryResponse"
+        "500":
+          description: Internal server error
+
+  /gpt/services:
+    get:
+      operationId: searchServices
+      summary: Search available sponsored services
+      description: >-
+        Call this when the user wants to find available sponsored services.
+        Supports keyword, category, budget, intent, and preference filtering.
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Keyword to search service names and sponsors
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by service category (e.g. design, scraping)
+        - name: max_budget_cents
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Maximum budget in cents for service filtering
+        - name: intent
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Natural language description of what the user wants to do
+        - name: session_token
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Session token to apply user preferences for filtering
+      responses:
+        "200":
+          description: List of matching services
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  services:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/GptServiceItem"
+                  total_count:
+                    type: integer
+                  message:
+                    type: string
+                  applied_filters:
+                    type: object
+                    nullable: true
+                    properties:
+                      budget:
+                        type: integer
+                        nullable: true
+                      intent:
+                        type: string
+                        nullable: true
+                      category:
+                        type: string
+                        nullable: true
+                      keyword:
+                        type: string
+                        nullable: true
+                      preferences_applied:
+                        type: boolean
+                  available_categories:
+                    type: array
+                    items:
+                      type: string
+                    nullable: true
+        "500":
+          description: Internal server error
+
+  /gpt/auth:
+    post:
+      operationId: authenticateUser
+      summary: Register or identify a user
+      description: >-
+        Call this before using any service. Registers a new user or
+        identifies an existing user by email. Returns a session token
+        for subsequent requests.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - region
+              properties:
+                email:
+                  type: string
+                  format: email
+                region:
+                  type: string
+                  description: User's region code (e.g. JP, US)
+                roles:
+                  type: array
+                  items:
+                    type: string
+                  default: []
+                tools_used:
+                  type: array
+                  items:
+                    type: string
+                  default: []
+      responses:
+        "200":
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_token:
+                    type: string
+                    format: uuid
+                  user_id:
+                    type: string
+                    format: uuid
+                  email:
+                    type: string
+                  is_new_user:
+                    type: boolean
+                  message:
+                    type: string
+        "500":
+          description: Internal server error
+
+  /gpt/tasks/{campaign_id}:
+    get:
+      operationId: getTaskDetails
+      summary: Get required task details for a campaign
+      description: >-
+        Call this after a user selects a service to see what task they
+        need to complete. Returns task input format and completion status.
+      parameters:
+        - name: campaign_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Campaign ID from searchServices result
+        - name: session_token
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Session token from authenticateUser
+      responses:
+        "200":
+          description: Task details retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  campaign_id:
+                    type: string
+                    format: uuid
+                  campaign_name:
+                    type: string
+                  sponsor:
+                    type: string
+                  required_task:
+                    type: string
+                  task_description:
+                    type: string
+                  task_input_format:
+                    type: object
+                    properties:
+                      task_type:
+                        type: string
+                      required_fields:
+                        type: array
+                        items:
+                          type: string
+                      instructions:
+                        type: string
+                  already_completed:
+                    type: boolean
+                  subsidy_amount_cents:
+                    type: integer
+                  message:
+                    type: string
+        "401":
+          description: Invalid or expired session token
+        "404":
+          description: Campaign not found
+
+  /gpt/tasks/{campaign_id}/complete:
+    post:
+      operationId: completeTask
+      summary: Complete a task and record consent
+      description: >-
+        Call this after the user provides the required task information.
+        Records consent for data sharing, contact, and data retention.
+      parameters:
+        - name: campaign_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - session_token
+                - task_name
+                - consent
+              properties:
+                session_token:
+                  type: string
+                  format: uuid
+                task_name:
+                  type: string
+                details:
+                  type: string
+                consent:
+                  type: object
+                  required:
+                    - data_sharing_agreed
+                    - purpose_acknowledged
+                    - contact_permission
+                  properties:
+                    data_sharing_agreed:
+                      type: boolean
+                      description: Whether user agrees to share data with the sponsor
+                    purpose_acknowledged:
+                      type: boolean
+                      description: Whether user acknowledges the data retention purpose
+                    contact_permission:
+                      type: boolean
+                      description: Whether user grants contact permission
+      responses:
+        "200":
+          description: Task completed and consent recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task_completion_id:
+                    type: string
+                    format: uuid
+                  campaign_id:
+                    type: string
+                    format: uuid
+                  consent_recorded:
+                    type: boolean
+                  can_use_service:
+                    type: boolean
+                  message:
+                    type: string
+        "401":
+          description: Invalid or expired session token
+        "404":
+          description: Campaign not found
+
+  /gpt/services/{service}/run:
+    post:
+      operationId: runService
+      summary: Execute a service with sponsor payment
+      description: >-
+        Call this after the user has completed the required task.
+        The sponsor pays for the service on behalf of the user.
+        Returns the service output.
+      parameters:
+        - name: service
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Service name (e.g. design, scraping, storage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - session_token
+                - input
+              properties:
+                session_token:
+                  type: string
+                  format: uuid
+                input:
+                  type: string
+                  description: User input for the service
+      responses:
+        "200":
+          description: Service executed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service:
+                    type: string
+                  output:
+                    type: string
+                  payment_mode:
+                    type: string
+                  sponsored_by:
+                    type: string
+                  tx_hash:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Invalid or expired session token
+        "412":
+          description: Task not completed or no matching campaign
+
+  /gpt/user/status:
+    get:
+      operationId: getUserStatus
+      summary: Check user status
+      description: >-
+        Call this to check the user's registration status, completed tasks,
+        and available services in one request.
+      parameters:
+        - name: session_token
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: User status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: string
+                    format: uuid
+                  email:
+                    type: string
+                  completed_tasks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        campaign_id:
+                          type: string
+                          format: uuid
+                        campaign_name:
+                          type: string
+                        task_name:
+                          type: string
+                        completed_at:
+                          type: string
+                          format: date-time
+                  available_services:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        service:
+                          type: string
+                        sponsor:
+                          type: string
+                        ready:
+                          type: boolean
+                  message:
+                    type: string
+        "401":
+          description: Invalid or expired session token
+
+  /gpt/preferences:
+    get:
+      operationId: getPreferences
+      summary: Get user task preferences
+      description: >-
+        Call this to retrieve the user's current task preferences.
+        Returns preferred, neutral, and avoided task types.
+      parameters:
+        - name: session_token
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Preferences retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: string
+                    format: uuid
+                  preferences:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        task_type:
+                          type: string
+                        level:
+                          type: string
+                          enum: [preferred, neutral, avoided]
+                  updated_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  message:
+                    type: string
+        "401":
+          description: Invalid or expired session token
+    post:
+      operationId: setPreferences
+      summary: Set user task preferences
+      description: >-
+        Call this when the user wants to set their task preferences.
+        Replaces all existing preferences with the provided list.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - session_token
+                - preferences
+              properties:
+                session_token:
+                  type: string
+                  format: uuid
+                preferences:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - task_type
+                      - level
+                    properties:
+                      task_type:
+                        type: string
+                        description: "Task type (e.g. survey, data_provision, github_pr)"
+                      level:
+                        type: string
+                        enum: [preferred, neutral, avoided]
+      responses:
+        "200":
+          description: Preferences updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: string
+                    format: uuid
+                  preferences_count:
+                    type: integer
+                  updated_at:
+                    type: string
+                    format: date-time
+                  message:
+                    type: string
+        "401":
+          description: Invalid or expired session token
+
+components:
+  schemas:
+    AgentDiscoveryResponse:
+      type: object
+      properties:
+        schema_version:
+          type: string
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentServiceMetadata"
+        total_count:
+          type: integer
+        message:
+          type: string
+    AgentServiceMetadata:
+      type: object
+      properties:
+        source:
+          type: string
+          enum: [campaign, sponsored_api]
+        service_id:
+          type: string
+          format: uuid
+        service_key:
+          type: string
+        name:
+          type: string
+        sponsor:
+          type: string
+        required_task:
+          type: string
+          nullable: true
+        capabilities:
+          type: array
+          items:
+            type: string
+        price_cents:
+          type: integer
+        subsidy_cents:
+          type: integer
+        sla:
+          $ref: "#/components/schemas/AgentServiceSla"
+        budget_total_cents:
+          type: integer
+        budget_remaining_cents:
+          type: integer
+        run_url:
+          type: string
+        ranking_score:
+          type: number
+        ranking_signals:
+          $ref: "#/components/schemas/AgentRankingSignals"
+    AgentServiceSla:
+      type: object
+      properties:
+        tier:
+          type: string
+          enum: [best_effort, standard]
+        target_latency_ms:
+          type: integer
+        target_success_rate:
+          type: number
+    AgentRankingSignals:
+      type: object
+      properties:
+        subsidy_score:
+          type: number
+        budget_health_score:
+          type: number
+        relevance_score:
+          type: number
+    GptServiceItem:
+      type: object
+      properties:
+        service_type:
+          type: string
+          enum: [campaign, sponsored_api]
+        service_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        sponsor:
+          type: string
+        required_task:
+          type: string
+        subsidy_amount_cents:
+          type: integer
+        category:
+          type: array
+          items:
+            type: string
+        active:
+          type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+        relevance_score:
+          type: number
+          format: double
+          nullable: true
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+security:
+  - ApiKeyAuth: []

@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: payloadexchange-backend
+    env: rust
+    buildCommand: cargo build --release
+    startCommand: ./target/release/payloadexchange_mvp
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: RUST_LOG
+        value: info
+    healthCheckPath: /health
+    plan: free
+
+  - type: web
+    name: subsidypayment-mcp
+    env: node
+    buildCommand: cd mcp-server && npm ci && npm run build
+    startCommand: cd mcp-server && npm start
+    envVars:
+      - key: RUST_BACKEND_URL
+        sync: false
+      - key: MCP_INTERNAL_API_KEY
+        sync: false
+      - key: AUTH0_DOMAIN
+        sync: false
+      - key: AUTH0_AUDIENCE
+        sync: false
+      - key: PUBLIC_URL
+        sync: false
+      - key: PORT
+        value: 3001
+    healthCheckPath: /health
+    plan: free
