@@ -14,7 +14,7 @@
 |---|---|---|
 | **GPTルーターパターン** | `src/main.rs:28-51` `build_gpt_router()` | `/agent/*` ルーターを同パターンで構築。ミドルウェアスタック（認証 + レート制限）がそのまま参考になる |
 | **RateLimiter** | `src/gpt.rs:25-85` | トークンバケットアルゴリズム実装済み。ただしグローバル共有なので、エージェントセッション単位への拡張が必要 |
-| **APIキー認証ミドルウェア** | `src/gpt.rs:87-117` `verify_gpt_api_key()` | Bearer トークン検証ロジックを流用。エージェント用環境変数 `AGENT_API_KEY` を追加する形 |
+| **APIキー認証ミドルウェア** | `src/gpt.rs:87-117` `verify_mcp_api_key()` | Bearer トークン検証ロジックを流用。エージェント用環境変数 `AGENT_API_KEY` を追加する形 |
 | **セッション解決** | `src/gpt.rs:119-132` `resolve_session()` | `gpt_sessions` テーブルのパターンを `agent_sessions` に適用 |
 | **サービス検索** | `src/gpt.rs:134-223` `gpt_search_services()` | campaigns + sponsored_apis の統合検索ロジックを拡張（スコアリング、ページネーション追加） |
 | **タスク完了フロー** | `src/gpt.rs:409-493` `gpt_complete_task()` | 同意記録 + タスク完了記録のパターンをそのまま流用。メタデータフィールド追加のみ |

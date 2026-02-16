@@ -28,7 +28,7 @@ GPT Apps（Custom GPTs + Custom Actions）をSubsidyPaymentバックエンドに
 
 **影響**:
 - バックエンド側で `Authorization: Bearer <api_key>` ヘッダーを検証するミドルウェアが必要
-- APIキーは環境変数 `GPT_ACTIONS_API_KEY` で管理
+- APIキーは環境変数 `MCP_INTERNAL_API_KEY` で管理
 - GPT Builder UIでこのキーを設定する運用手順が必要
 
 ### トピック2: OpenAPI 3.1.0スキーマのGPT固有制約
@@ -67,7 +67,7 @@ let gpt_routes = Router::new()
     .route("/services", get(gpt_search_services))
     .route("/auth", post(gpt_auth))
     // ...
-    .layer(middleware::from_fn(verify_gpt_api_key));
+    .layer(middleware::from_fn(verify_mcp_api_key));
 
 let app = Router::new()
     .nest("/gpt", gpt_routes)  // 認証付き

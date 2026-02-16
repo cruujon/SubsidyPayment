@@ -8,7 +8,7 @@
 
 - `src/gpt.rs` に7つのGPT Actionsハンドラを実装済み（`gpt_search_services`, `gpt_auth`, `gpt_get_tasks`, `gpt_complete_task`, `gpt_run_service`, `gpt_user_status`, `gpt_get_preferences`/`gpt_set_preferences`）
 - `openapi.yaml` でOpenAPI 3.1.0スキーマを定義し、ChatGPT Custom GPTのCustom Actionsとして公開
-- 認証: `GPT_ACTIONS_API_KEY` による単純なBearer トークン認証
+- 認証: `MCP_INTERNAL_API_KEY` による単純なBearer トークン認証
 - セッション管理: `gpt_sessions` テーブルによる30日間トークン
 - UI: テキストのみのレスポンス（GPTが自然言語で要約）
 
@@ -92,7 +92,7 @@
 
 - **5.1**: 既存の `/gpt/*` エンドポイント群は、MCPサーバーからのHTTPリクエストを受け付けるために引き続き動作しなければならない（EARS: Ubiquitous）
 - **5.2**: `openapi.yaml` ファイルおよび `/.well-known/openapi.yaml` 配信エンドポイントは、GPT App SDK移行完了後に削除されなければならない（EARS: Event-driven）
-- **5.3**: GPT Actionsの `verify_gpt_api_key` ミドルウェアは、MCPサーバーからの内部通信認証に転用されるか、OAuth認証で置き換えられなければならない（EARS: Ubiquitous）
+- **5.3**: GPT Actionsの `verify_mcp_api_key` ミドルウェアは、MCPサーバーからの内部通信認証に転用されるか、OAuth認証で置き換えられなければならない（EARS: Ubiquitous）
 - **5.4**: 既存の `GptSearchResponse`, `GptAuthResponse` 等のレスポンス型は、MCPツールの `structuredContent` として再利用可能な形式を維持しなければならない（EARS: Ubiquitous）
 
 ---

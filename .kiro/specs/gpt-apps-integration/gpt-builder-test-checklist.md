@@ -7,7 +7,7 @@
 ## 前提条件
 
 - [ ] バックエンドサーバーが起動済み（`PUBLIC_BASE_URL` でアクセス可能）
-- [ ] `GPT_ACTIONS_API_KEY` が環境変数に設定済み
+- [ ] `MCP_INTERNAL_API_KEY` が環境変数に設定済み
 - [ ] `DATABASE_URL` が設定済みでDBにアクティブなキャンペーンが存在する
 - [ ] `cargo test gpt_builder_preflight` が全てパスしている
 
@@ -32,7 +32,7 @@
 
 - [ ] Authentication → API Key を選択
 - [ ] Auth Type: Bearer
-- [ ] API Key: `GPT_ACTIONS_API_KEY` の値を入力
+- [ ] API Key: `MCP_INTERNAL_API_KEY` の値を入力
 - [ ] **検証**: 認証設定が保存される
 
 ### 1.3 基本設定

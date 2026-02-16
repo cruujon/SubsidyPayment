@@ -12,7 +12,7 @@
 | **説明** | スポンサー付き x402 サービスの検索・タスク実行・支払いを支援する GPT |
 | **OpenAPI スキーマ URL** | `https://<PUBLIC_BASE_URL>/.well-known/openapi.yaml` |
 | **認証方式** | API Key（Bearer トークン） |
-| **認証ヘッダー** | `Authorization: Bearer <GPT_ACTIONS_API_KEY>` |
+| **認証ヘッダー** | `Authorization: Bearer <MCP_INTERNAL_API_KEY>` |
 | **プライバシーポリシー URL** | `https://<PUBLIC_BASE_URL>/privacy` |
 
 > **注意**: `<PUBLIC_BASE_URL>` は本番環境の公開 URL に置き換えてください。
@@ -142,10 +142,10 @@
 |---|---|---|
 | `DATABASE_URL` | (上記でコピーした Internal Database URL) | PostgreSQL 接続文字列 |
 | `PUBLIC_BASE_URL` | `https://payloadexchange-backend.onrender.com` | Render が割り当てた公開 URL |
-| `GPT_ACTIONS_API_KEY` | (ランダムな安全な文字列を生成) | GPT Actions 認証用 API キー |
+| `MCP_INTERNAL_API_KEY` | (ランダムな安全な文字列を生成) | GPT Actions 認証用 API キー |
 | `CORS_ALLOW_ORIGINS` | `https://chatgpt.com,https://chat.openai.com` | ChatGPT からのリクエストを許可 |
 
-> **GPT_ACTIONS_API_KEY の生成**: `openssl rand -base64 32` などで安全なランダム文字列を生成してください。この値は GPT Builder の認証設定にも使います。
+> **MCP_INTERNAL_API_KEY の生成**: `openssl rand -base64 32` などで安全なランダム文字列を生成してください。この値は GPT Builder の認証設定にも使います。
 
 ### 4.4 デプロイの確認
 
@@ -178,7 +178,7 @@
 3. スキーマがインポートされ、Actions（searchServices, authenticateUser, getTaskDetails, completeTask, runService, getUserStatus, getPreferences, setPreferences）が表示されることを確認
 4. 「Authentication」で「API Key」を選択し、以下を設定:
    - **Auth Type**: Bearer
-   - **API Key**: Render に設定した `GPT_ACTIONS_API_KEY` と同じ値を入力
+   - **API Key**: Render に設定した `MCP_INTERNAL_API_KEY` と同じ値を入力
 
 ### 5.4 プライバシーポリシー
 

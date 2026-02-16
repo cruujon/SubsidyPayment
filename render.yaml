@@ -11,7 +11,7 @@ services:
         sync: false
       - key: RUST_LOG
         value: info
-      - key: GPT_ACTIONS_API_KEY
+      - key: MCP_INTERNAL_API_KEY
         sync: false
       - key: CORS_ALLOW_ORIGINS
         sync: false

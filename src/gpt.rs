@@ -85,7 +85,7 @@ pub async fn rate_limit_middleware(
     }
 }
 
-pub async fn verify_gpt_api_key(
+pub async fn verify_mcp_api_key(
     State(state): State<SharedState>,
     headers: HeaderMap,
     request: axum::extract::Request,
@@ -93,7 +93,7 @@ pub async fn verify_gpt_api_key(
 ) -> Result<Response, ApiError> {
     let expected_key = {
         let s = state.inner.read().await;
-        s.config.gpt_actions_api_key.clone()
+        s.config.mcp_internal_api_key.clone()
     };
 
     let expected_key = match expected_key {

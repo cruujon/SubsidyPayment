@@ -67,7 +67,7 @@
 
 **発見事項**:
 - GPTルーターは `Router::new()` + `.route()` チェーンで構築
-- 認証ミドルウェア (`verify_gpt_api_key`) とレート制限ミドルウェア (`rate_limit_middleware`) がレイヤーとして適用
+- 認証ミドルウェア (`verify_mcp_api_key`) とレート制限ミドルウェア (`rate_limit_middleware`) がレイヤーとして適用
 - 全GPTルートは `/gpt/*` プレフィックス配下にネスト
 
 **設計への影響**:

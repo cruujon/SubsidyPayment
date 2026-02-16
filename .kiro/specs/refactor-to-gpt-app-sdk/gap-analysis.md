@@ -48,16 +48,16 @@
 
 ```
 現在のフロー:
-[ChatGPT] → Authorization: Bearer {GPT_ACTIONS_API_KEY} → [Axum /gpt/*]
+[ChatGPT] → Authorization: Bearer {MCP_INTERNAL_API_KEY} → [Axum /gpt/*]
                                                            ↓
-                                                     verify_gpt_api_key ミドルウェア
+                                                     verify_mcp_api_key ミドルウェア
                                                            ↓
                                                      各ハンドラで resolve_session(session_token)
                                                            ↓
                                                      user_id を取得してビジネスロジック実行
 
 問題点:
-- GPT_ACTIONS_API_KEY は全ユーザー共通（GPT全体で1つ）
+- MCP_INTERNAL_API_KEY は全ユーザー共通（GPT全体で1つ）
 - session_token はリクエストボディ/クエリで手動渡し
 - OAuth 2.1 では個別ユーザーのトークンが発行される → session_token の仕組みが変わる
 ```
@@ -173,7 +173,7 @@
 |---|---|---|---|
 | `/gpt/*` エンドポイント維持 | ✅ 動作中 | 変更不要 | なし |
 | `openapi.yaml` 削除 | ✅ 存在 | 移行完了後に削除 | 低 |
-| `verify_gpt_api_key` 転用 | ✅ 実装済み | MCP→Rust内部通信用に維持 or 削除 | 低 |
+| `verify_mcp_api_key` 転用 | ✅ 実装済み | MCP→Rust内部通信用に維持 or 削除 | 低 |
 | レスポンス型の互換性 | ✅ Serialize済み | 変更不要 | なし |
 
 **影響が小さい**: Rust側はほぼ変更不要。MCP→Rust通信の認証方式のみ決定が必要。
@@ -300,7 +300,7 @@
 │         Rust/Axum Backend (既存・変更最小)              ││
 │                                                        ││
 │  /gpt/* エンドポイント群 (既存ハンドラ8本)              ││
-│  verify_gpt_api_key → 内部通信認証に転用              ││
+│  verify_mcp_api_key → 内部通信認証に転用              ││
 │  resolve_session → OAuth統合 or 維持                  ││
 │                                                        ││
 │  /campaigns, /tasks/complete, /proxy/* (変更なし)      ││
