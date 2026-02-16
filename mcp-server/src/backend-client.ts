@@ -34,10 +34,12 @@ export class BackendClientError extends Error {
 export class BackendClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
+  private readonly timeoutMs: number;
 
   constructor(config: BackendConfig) {
     this.baseUrl = config.rustBackendUrl.replace(/\/$/, '');
     this.apiKey = config.mcpInternalApiKey;
+    this.timeoutMs = 15000;
   }
 
   async searchServices(params: SearchServicesParams): Promise<GptSearchResponse> {
@@ -120,14 +122,26 @@ export class BackendClient {
       ...((init.headers as Record<string, string> | undefined) ?? {}),
     };
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     let response: Response;
     try {
       response = await fetch(`${this.baseUrl}${path}`, {
         ...init,
         headers,
+        signal: controller.signal,
       });
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new BackendClientError(
+          'backend_timeout',
+          `Rust backend timed out after ${this.timeoutMs}ms`,
+          error
+        );
+      }
       throw new BackendClientError('backend_unavailable', 'Rust backend is unavailable', error);
+    } finally {
+      clearTimeout(timeout);
     }
 
     if (!response.ok) {
