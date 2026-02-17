@@ -165,15 +165,15 @@ pub async fn resolve_session_optional(
     session_token: Option<Uuid>,
 ) -> ApiResult<Uuid> {
     if config.gpt_session_required {
-        let token = session_token
-            .ok_or_else(|| ApiError::unauthorized("session_token is required"))?;
+        let token =
+            session_token.ok_or_else(|| ApiError::unauthorized("session_token is required"))?;
         resolve_session(db, token).await
     } else {
         // Auth disabled: if token provided try to resolve, otherwise use anonymous
-        if let Some(token) = session_token {
-            if let Ok(user_id) = resolve_session(db, token).await {
-                return Ok(user_id);
-            }
+        if let Some(token) = session_token
+            && let Ok(user_id) = resolve_session(db, token).await
+        {
+            return Ok(user_id);
         }
         ensure_anonymous_user(db).await
     }
