@@ -1208,7 +1208,7 @@ async fn run_proxy(
 
     // Load user from database
     let user = sqlx::query_as::<_, UserProfile>(
-        "select id, email, region, roles, tools_used, attributes, created_at from users where id = $1"
+        "select id, email, region, roles, tools_used, attributes, created_at, source from users where id = $1"
     )
     .bind(payload.user_id)
     .fetch_optional(&db)
