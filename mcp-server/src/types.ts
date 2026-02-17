@@ -78,6 +78,30 @@ export interface GptUserStatusResponse {
   message: string;
 }
 
+export interface GptUserRecordResponse {
+  user_id: string;
+  email: string;
+  history: GptUserRecordEntry[];
+  sponsor_summaries: GptUserRecordSponsorSummary[];
+  total_subsidy_cents: number;
+  message: string;
+}
+
+export interface GptUserRecordEntry {
+  service: string;
+  sponsor: string;
+  subsidy_cents: number;
+  payment_mode: 'sponsored' | 'user_direct';
+  tx_hash: string | null;
+  used_at: string;
+}
+
+export interface GptUserRecordSponsorSummary {
+  sponsor: string;
+  services_used: number;
+  total_subsidy_cents: number;
+}
+
 export interface GptCompletedTaskSummary {
   campaign_id: string;
   campaign_name: string;
@@ -159,6 +183,10 @@ export interface RunServiceInput {
 }
 
 export interface GetUserStatusParams {
+  session_token: string;
+}
+
+export interface GetUserRecordParams {
   session_token: string;
 }
 

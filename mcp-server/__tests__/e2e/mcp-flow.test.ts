@@ -8,6 +8,7 @@ const mocked = vi.hoisted(() => ({
   getTaskDetails: vi.fn(),
   completeTask: vi.fn(),
   runService: vi.fn(),
+  getUserRecord: vi.fn(),
   verifyToken: vi.fn(),
 }));
 
@@ -27,6 +28,7 @@ vi.mock('../../src/backend-client.ts', async () => {
     completeTask = mocked.completeTask;
     runService = mocked.runService;
     getUserStatus = vi.fn();
+    getUserRecord = mocked.getUserRecord;
     getPreferences = vi.fn();
     setPreferences = vi.fn();
   }
@@ -83,6 +85,7 @@ describe('MCP E2E flow (task 9.3)', () => {
     mocked.getTaskDetails.mockReset();
     mocked.completeTask.mockReset();
     mocked.runService.mockReset();
+    mocked.getUserRecord.mockReset();
     mocked.verifyToken.mockReset();
   });
 

@@ -41,6 +41,7 @@ fn build_gpt_router(state: SharedState) -> Router<SharedState> {
         )
         .route("/services/{service}/run", post(gpt::gpt_run_service))
         .route("/user/status", get(gpt::gpt_user_status))
+        .route("/user/record", get(gpt::gpt_user_record))
         .route(
             "/preferences",
             get(gpt::gpt_get_preferences).post(gpt::gpt_set_preferences),

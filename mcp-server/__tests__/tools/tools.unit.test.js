@@ -8,6 +8,7 @@ const mocked = vi.hoisted(() => ({
     completeTask: vi.fn(),
     runService: vi.fn(),
     getUserStatus: vi.fn(),
+    getUserRecord: vi.fn(),
     getPreferences: vi.fn(),
     setPreferences: vi.fn(),
     verifyToken: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock('../../src/backend-client.ts', () => {
         completeTask = mocked.completeTask;
         runService = mocked.runService;
         getUserStatus = mocked.getUserStatus;
+        getUserRecord = mocked.getUserRecord;
         getPreferences = mocked.getPreferences;
         setPreferences = mocked.setPreferences;
     }
@@ -84,13 +86,14 @@ describe('MCP tools unit tests (task 9.1)', () => {
         mocked.completeTask.mockReset();
         mocked.runService.mockReset();
         mocked.getUserStatus.mockReset();
+        mocked.getUserRecord.mockReset();
         mocked.getPreferences.mockReset();
         mocked.setPreferences.mockReset();
         mocked.verifyToken.mockReset();
     });
-    it('registers all 8 tools with expected security schemes', () => {
+    it('registers all 9 tools with expected security schemes', () => {
         registerAndCaptureTools();
-        expect(mocked.registrations.size).toBe(8);
+        expect(mocked.registrations.size).toBe(9);
         expect(getRegistered('search_services').definition._meta.securitySchemes).toEqual([{ type: 'noauth' }]);
         const oauthTools = [
             'authenticate_user',
@@ -98,6 +101,7 @@ describe('MCP tools unit tests (task 9.1)', () => {
             'complete_task',
             'run_service',
             'get_user_status',
+            'user_record',
             'get_preferences',
             'set_preferences',
         ];

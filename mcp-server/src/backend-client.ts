@@ -4,6 +4,7 @@ import type {
   BackendErrorResponse,
   CompleteTaskInput,
   GetPreferencesParams,
+  GetUserRecordParams,
   GetTaskDetailsParams,
   GetUserStatusParams,
   GptAuthResponse,
@@ -13,6 +14,7 @@ import type {
   GptSearchResponse,
   GptSetPreferencesResponse,
   GptTaskResponse,
+  GptUserRecordResponse,
   GptUserStatusResponse,
   RunServiceInput,
   SearchServicesParams,
@@ -95,6 +97,14 @@ export class BackendClient {
     const params: GetUserStatusParams = { session_token: sessionToken };
     return this.request<GptUserStatusResponse>(
       `/gpt/user/status?session_token=${encodeURIComponent(params.session_token)}`,
+      { method: 'GET' }
+    );
+  }
+
+  async getUserRecord(sessionToken: string): Promise<GptUserRecordResponse> {
+    const params: GetUserRecordParams = { session_token: sessionToken };
+    return this.request<GptUserRecordResponse>(
+      `/gpt/user/record?session_token=${encodeURIComponent(params.session_token)}`,
       { method: 'GET' }
     );
   }

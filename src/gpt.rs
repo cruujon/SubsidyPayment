@@ -5,6 +5,7 @@ use axum::{
     response::Response,
 };
 use sqlx::PgPool;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
@@ -20,6 +21,7 @@ use crate::types::{
     GptPreferencesParams, GptPreferencesResponse, GptRunServiceRequest, GptRunServiceResponse,
     GptSearchParams, GptSearchResponse, GptServiceItem, GptSetPreferencesRequest,
     GptSetPreferencesResponse, GptTaskInputFormat, GptTaskParams, GptTaskResponse,
+    GptUserRecordEntry, GptUserRecordParams, GptUserRecordResponse, GptUserRecordSponsorSummary,
     GptUserStatusParams, GptUserStatusResponse, SharedState, SponsoredApi,
     SponsoredApiRow as FullSponsoredApiRow, TaskPreference, UserProfile,
 };
@@ -951,6 +953,23 @@ pub async fn gpt_run_service(
             )
         };
 
+        sqlx::query(
+            "INSERT INTO gpt_service_runs (id, user_id, campaign_id, service, sponsor, subsidy_cents, payment_mode, tx_hash, created_at) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+        )
+        .bind(Uuid::new_v4())
+        .bind(user_id)
+        .bind(campaign.id)
+        .bind(&service)
+        .bind(&campaign.sponsor)
+        .bind(price as i64)
+        .bind("sponsored")
+        .bind(&tx_hash)
+        .bind(Utc::now())
+        .execute(&db)
+        .await
+        .map_err(|e| ApiError::internal(format!("gpt run history insert failed: {e}")))?;
+
         return Ok(Json(GptRunServiceResponse {
             service,
             output,
@@ -1087,6 +1106,109 @@ pub async fn gpt_user_status(
     }
     .await;
     respond(&metrics, "gpt_user_status", result)
+}
+
+#[derive(sqlx::FromRow)]
+struct GptServiceRunRow {
+    service: String,
+    sponsor: Option<String>,
+    subsidy_cents: i64,
+    payment_mode: String,
+    tx_hash: Option<String>,
+    created_at: chrono::DateTime<Utc>,
+}
+
+pub async fn gpt_user_record(
+    State(state): State<SharedState>,
+    Query(params): Query<GptUserRecordParams>,
+) -> Response {
+    let metrics = { state.inner.read().await.metrics.clone() };
+    let result: ApiResult<Json<GptUserRecordResponse>> = async {
+        let db = {
+            let s = state.inner.read().await;
+            s.db.clone()
+                .ok_or_else(|| ApiError::internal("database not configured"))?
+        };
+
+        let user_id = resolve_session(&db, params.session_token).await?;
+
+        let user = sqlx::query_as::<_, UserProfile>(
+            "SELECT id, email, region, roles, tools_used, attributes, created_at, source \
+             FROM users WHERE id = $1",
+        )
+        .bind(user_id)
+        .fetch_optional(&db)
+        .await
+        .map_err(|e| ApiError::internal(format!("user lookup failed: {e}")))?
+        .ok_or_else(|| ApiError::not_found("user not found"))?;
+
+        let rows = sqlx::query_as::<_, GptServiceRunRow>(
+            "SELECT service, sponsor, subsidy_cents, payment_mode, tx_hash, created_at \
+             FROM gpt_service_runs \
+             WHERE user_id = $1 \
+             ORDER BY created_at DESC \
+             LIMIT 200",
+        )
+        .bind(user_id)
+        .fetch_all(&db)
+        .await
+        .map_err(|e| ApiError::internal(format!("service run history query failed: {e}")))?;
+
+        let mut total_subsidy_cents: u64 = 0;
+        let mut sponsor_rollup: BTreeMap<String, (usize, u64)> = BTreeMap::new();
+        let mut history: Vec<GptUserRecordEntry> = Vec::with_capacity(rows.len());
+
+        for row in rows {
+            let sponsor = row.sponsor.unwrap_or_else(|| "direct".to_string());
+            let subsidy_cents = u64::try_from(row.subsidy_cents).unwrap_or(0);
+            total_subsidy_cents = total_subsidy_cents.saturating_add(subsidy_cents);
+            let entry = sponsor_rollup.entry(sponsor.clone()).or_insert((0, 0));
+            entry.0 += 1;
+            entry.1 = entry.1.saturating_add(subsidy_cents);
+
+            history.push(GptUserRecordEntry {
+                service: row.service,
+                sponsor,
+                subsidy_cents,
+                payment_mode: row.payment_mode,
+                tx_hash: row.tx_hash,
+                used_at: row.created_at,
+            });
+        }
+
+        let sponsor_summaries: Vec<GptUserRecordSponsorSummary> = sponsor_rollup
+            .into_iter()
+            .map(
+                |(sponsor, (services_used, total_subsidy_cents))| GptUserRecordSponsorSummary {
+                    sponsor,
+                    services_used,
+                    total_subsidy_cents,
+                },
+            )
+            .collect();
+
+        let message = if history.is_empty() {
+            "No usage history found yet. Complete a task and run a service to generate records."
+                .to_string()
+        } else {
+            format!(
+                "Found {} usage record(s) with {} total subsidy cents.",
+                history.len(),
+                total_subsidy_cents
+            )
+        };
+
+        Ok(Json(GptUserRecordResponse {
+            user_id,
+            email: user.email,
+            history,
+            sponsor_summaries,
+            total_subsidy_cents,
+            message,
+        }))
+    }
+    .await;
+    respond(&metrics, "gpt_user_record", result)
 }
 
 #[derive(sqlx::FromRow)]

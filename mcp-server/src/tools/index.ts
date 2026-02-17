@@ -9,6 +9,7 @@ import { registerGetUserStatusTool } from './get-user-status.ts';
 import { registerRunServiceTool } from './run-service.ts';
 import { registerSearchServicesTool } from './search-services.ts';
 import { registerSetPreferencesTool } from './set-preferences.ts';
+import { registerUserRecordTool } from './user-record.ts';
 
 export function registerAllTools(server: McpServer, config: BackendConfig): void {
   registerSearchServicesTool(server, config);
@@ -17,6 +18,7 @@ export function registerAllTools(server: McpServer, config: BackendConfig): void
   registerCompleteTaskTool(server, config);
   registerRunServiceTool(server, config);
   registerGetUserStatusTool(server, config);
+  registerUserRecordTool(server, config);
   registerGetPreferencesTool(server, config);
   registerSetPreferencesTool(server, config);
 }

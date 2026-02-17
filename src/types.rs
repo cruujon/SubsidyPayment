@@ -777,6 +777,38 @@ pub struct GptUserStatusResponse {
     pub message: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct GptUserRecordParams {
+    pub session_token: Uuid,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GptUserRecordResponse {
+    pub user_id: Uuid,
+    pub email: String,
+    pub history: Vec<GptUserRecordEntry>,
+    pub sponsor_summaries: Vec<GptUserRecordSponsorSummary>,
+    pub total_subsidy_cents: u64,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GptUserRecordEntry {
+    pub service: String,
+    pub sponsor: String,
+    pub subsidy_cents: u64,
+    pub payment_mode: String,
+    pub tx_hash: Option<String>,
+    pub used_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GptUserRecordSponsorSummary {
+    pub sponsor: String,
+    pub services_used: usize,
+    pub total_subsidy_cents: u64,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GptCompletedTaskSummary {
     pub campaign_id: Uuid,
