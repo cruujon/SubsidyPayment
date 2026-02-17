@@ -35,11 +35,13 @@ export class BackendClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
   private readonly timeoutMs: number;
+  private readonly maxRetries: number;
 
   constructor(config: BackendConfig) {
     this.baseUrl = config.rustBackendUrl.replace(/\/$/, '');
     this.apiKey = config.mcpInternalApiKey;
-    this.timeoutMs = 15000;
+    this.timeoutMs = config.backendTimeoutMs;
+    this.maxRetries = config.backendRetries;
   }
 
   async searchServices(params: SearchServicesParams): Promise<GptSearchResponse> {
@@ -122,34 +124,59 @@ export class BackendClient {
       ...((init.headers as Record<string, string> | undefined) ?? {}),
     };
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
-    let response: Response;
-    try {
-      response = await fetch(`${this.baseUrl}${path}`, {
-        ...init,
-        headers,
-        signal: controller.signal,
-      });
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        throw new BackendClientError(
-          'backend_timeout',
-          `Rust backend timed out after ${this.timeoutMs}ms`,
-          error
-        );
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      if (attempt > 0) {
+        const delayMs = Math.min(2000 * 2 ** (attempt - 1), 10000);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
-      throw new BackendClientError('backend_unavailable', 'Rust backend is unavailable', error);
-    } finally {
-      clearTimeout(timeout);
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+      try {
+        const response = await fetch(`${this.baseUrl}${path}`, {
+          ...init,
+          headers,
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          const parsed = await this.safeParseError(response);
+          throw new BackendClientError(parsed.code, parsed.message, parsed.details);
+        }
+
+        return (await response.json()) as T;
+      } catch (error) {
+        lastError = error;
+
+        if (error instanceof BackendClientError && error.code !== 'backend_timeout' && error.code !== 'backend_unavailable') {
+          throw error;
+        }
+
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          lastError = new BackendClientError(
+            'backend_timeout',
+            `Rust backend timed out after ${this.timeoutMs}ms (attempt ${attempt + 1}/${this.maxRetries + 1})`,
+            error
+          );
+          continue;
+        }
+
+        if (!(error instanceof BackendClientError)) {
+          lastError = new BackendClientError(
+            'backend_unavailable',
+            `Rust backend is unavailable (attempt ${attempt + 1}/${this.maxRetries + 1})`,
+            error
+          );
+          continue;
+        }
+      } finally {
+        clearTimeout(timeout);
+      }
     }
 
-    if (!response.ok) {
-      const parsed = await this.safeParseError(response);
-      throw new BackendClientError(parsed.code, parsed.message, parsed.details);
-    }
-
-    return (await response.json()) as T;
+    throw lastError;
   }
 
   private async safeParseError(response: Response): Promise<{ code: string; message: string; details?: unknown }> {

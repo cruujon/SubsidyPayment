@@ -42,6 +42,9 @@ const client = new BackendClient({
   publicUrl: 'http://localhost:3001',
   port: 3001,
   logLevel: 'info',
+  authEnabled: false,
+  backendTimeoutMs: 60000,
+  backendRetries: 0,
 });
 
 await client.searchServices({ q: 'design', max_budget_cents: 100 });

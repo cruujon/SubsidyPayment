@@ -7,12 +7,20 @@ export interface BackendConfig {
   port: number;
   logLevel: string;
   authEnabled: boolean;
+  backendTimeoutMs: number;
+  backendRetries: number;
 }
 
 function parsePort(value: string | undefined): number {
   if (!value) return 3001;
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 3001;
+}
+
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function resolveAuthEnabled(env: NodeJS.ProcessEnv): boolean {
@@ -33,5 +41,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     port: parsePort(env.PORT),
     logLevel: env.LOG_LEVEL || 'info',
     authEnabled: resolveAuthEnabled(env),
+    backendTimeoutMs: parsePositiveInt(env.BACKEND_TIMEOUT_MS, 60000),
+    backendRetries: parsePositiveInt(env.BACKEND_RETRIES, 2),
   };
 }
