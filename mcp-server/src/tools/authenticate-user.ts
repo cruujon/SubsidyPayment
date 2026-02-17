@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { BackendClient, BackendClientError } from '../backend-client.ts';
 import { TokenVerifier } from '../auth/token-verifier.ts';
 import type { BackendConfig } from '../config.ts';
+import { rememberSessionToken } from './session-manager.ts';
 
 
 const authenticateUserInputSchema = z.object({
@@ -110,6 +111,7 @@ export function registerAuthenticateUserTool(server: McpServer, config: BackendC
           roles: input.roles ?? [],
           tools_used: input.tools_used ?? [],
         });
+        rememberSessionToken(context, response.session_token, response.email);
 
         return {
           structuredContent: {

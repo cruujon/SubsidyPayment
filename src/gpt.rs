@@ -997,7 +997,7 @@ pub async fn gpt_user_status(
                 &campaign.required_task,
             )
             .await
-            .unwrap_or(false);
+            .map_err(|e| ApiError::internal(format!("task readiness query failed: {e}")))?;
 
             for tool in &campaign.target_tools {
                 available_services.push(GptAvailableService {

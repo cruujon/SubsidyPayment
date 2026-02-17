@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { TokenVerifier } from '../auth/token-verifier.ts';
 import { BackendClient, BackendClientError } from '../backend-client.ts';
 import type { BackendConfig } from '../config.ts';
+import { resolveOrCreateNoAuthSessionToken } from './session-manager.ts';
 
 const getUserStatusInputSchema = z.object({
   session_token: z.string().optional(),
@@ -20,19 +21,6 @@ function unauthorizedSessionResponse(publicUrl: string) {
     },
     isError: true,
   };
-}
-
-function resolveSessionToken(input: { session_token?: string }, context: any): string | null {
-  const contextToken = context?._meta?.session_token ?? context?.session_token ?? null;
-  if (typeof contextToken === 'string' && contextToken.length > 0) {
-    return contextToken;
-  }
-
-  if (typeof input.session_token === 'string' && input.session_token.length > 0) {
-    return input.session_token;
-  }
-
-  return null;
 }
 
 function resolveBearerToken(context: any): string | null {
@@ -84,12 +72,12 @@ export function registerGetUserStatusTool(server: McpServer, config: BackendConf
         }
       }
 
-      const sessionToken = resolveSessionToken(input, context);
-      if (!sessionToken) {
-        return unauthorizedSessionResponse(config.publicUrl);
-      }
-
       try {
+        const sessionToken = await resolveOrCreateNoAuthSessionToken(client, config, input, context);
+        if (!sessionToken) {
+          return unauthorizedSessionResponse(config.publicUrl);
+        }
+
         const response = await client.getUserStatus(sessionToken);
         return {
           structuredContent: {
