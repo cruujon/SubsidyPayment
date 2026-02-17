@@ -6,7 +6,7 @@ info:
     and execute paid services with sponsor subsidies.
   version: "1.0.0"
 servers:
-  - url: https://subsidypayment.example.com
+  - url: https://subsidypayment-1k0h.onrender.com
     description: Production
 paths:
   /agent/discovery/services:
