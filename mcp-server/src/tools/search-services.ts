@@ -11,7 +11,23 @@ const searchServicesInputSchema = z.object({
   category: z.string().optional(),
   max_budget_cents: z.number().int().nonnegative().optional(),
   intent: z.string().optional(),
+  session_token: z.string().uuid().optional(),
 });
+
+const sessionTokenSchema = z.string().uuid();
+
+function resolveSessionToken(input: { session_token?: string }, context: any): string | null {
+  const contextToken = context?._meta?.session_token ?? context?.session_token ?? null;
+  if (typeof contextToken === 'string' && contextToken.length > 0) {
+    return contextToken;
+  }
+
+  if (typeof input.session_token === 'string' && input.session_token.length > 0) {
+    return input.session_token;
+  }
+
+  return null;
+}
 
 function toSearchServicesResult(response: GptSearchResponse) {
   return {
@@ -50,9 +66,26 @@ export function registerSearchServicesTool(server: McpServer, config: BackendCon
         'openai/toolInvocation/invoked': 'Services found',
       },
     },
-    async (input: SearchServicesParams) => {
+    async (input: SearchServicesParams, context: any) => {
       try {
-        const response = await client.searchServices(input);
+        const sessionToken = resolveSessionToken(input, context);
+        if (sessionToken && !sessionTokenSchema.safeParse(sessionToken).success) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: 'Invalid session_token format. Call authenticate_user and use the returned _meta.session_token.',
+              },
+            ],
+            _meta: { code: 'invalid_session_token' },
+            isError: true,
+          };
+        }
+
+        const response = await client.searchServices({
+          ...input,
+          session_token: sessionToken ?? undefined,
+        });
         return toSearchServicesResult(response);
       } catch (error) {
         if (error instanceof BackendClientError) {

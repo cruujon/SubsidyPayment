@@ -135,6 +135,7 @@ describe('MCP tools unit tests (task 9.1)', () => {
 
   it('returns 3-part response for search_services success', async () => {
     registerAndCaptureTools();
+    const sessionToken = '11111111-1111-4111-8111-111111111111';
     mocked.searchServices.mockResolvedValue({
       services: [],
       total_count: 0,
@@ -144,12 +145,26 @@ describe('MCP tools unit tests (task 9.1)', () => {
     });
 
     const { handler } = getRegistered('search_services');
-    const result = await handler({ q: 'design' }, {});
+    const result = await handler({ q: 'design' }, { _meta: { session_token: sessionToken } });
 
     expect(result.structuredContent).toBeDefined();
     expect(result.content).toBeDefined();
     expect(result._meta).toBeDefined();
     expect(result.isError).toBeUndefined();
+    expect(mocked.searchServices).toHaveBeenCalledWith({
+      q: 'design',
+      session_token: sessionToken,
+    });
+  });
+
+  it('returns validation error for invalid session token in search_services', async () => {
+    registerAndCaptureTools();
+    const { handler } = getRegistered('search_services');
+    const result = await handler({ q: 'design' }, { _meta: { session_token: 'session-token' } });
+
+    expect(result.isError).toBe(true);
+    expect(result._meta.code).toBe('invalid_session_token');
+    expect(mocked.searchServices).not.toHaveBeenCalled();
   });
 
   it('returns backend error for search_services failure', async () => {
