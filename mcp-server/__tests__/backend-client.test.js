@@ -8,6 +8,9 @@ const config = {
     publicUrl: 'http://localhost:3001',
     port: 3001,
     logLevel: 'info',
+    authEnabled: false,
+    backendTimeoutMs: 5000,
+    backendRetries: 0,
 };
 function mockJsonResponse(status, body) {
     return {

@@ -40,6 +40,7 @@ pub struct AppConfig {
     pub mcp_internal_api_key: Option<String>,
     pub agent_discovery_api_key: Option<String>,
     pub agent_discovery_rate_limit_per_min: u32,
+    pub gpt_session_required: bool,
 }
 
 impl AppConfig {
@@ -73,6 +74,9 @@ impl AppConfig {
                 DEFAULT_AGENT_DISCOVERY_RATE_LIMIT_PER_MIN,
             )
             .clamp(1, u64::from(u32::MAX)) as u32,
+            gpt_session_required: std::env::var("GPT_SESSION_REQUIRED")
+                .map(|v| v != "false" && v != "0")
+                .unwrap_or(true),
         }
     }
 }
@@ -700,7 +704,7 @@ pub struct GptAuthResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct GptTaskParams {
-    pub session_token: Uuid,
+    pub session_token: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -725,7 +729,7 @@ pub struct GptTaskInputFormat {
 
 #[derive(Debug, Deserialize)]
 pub struct GptCompleteTaskRequest {
-    pub session_token: Uuid,
+    pub session_token: Option<Uuid>,
     pub task_name: String,
     pub details: Option<String>,
     pub consent: GptConsentInput,
@@ -749,7 +753,7 @@ pub struct GptCompleteTaskResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct GptRunServiceRequest {
-    pub session_token: Uuid,
+    pub session_token: Option<Uuid>,
     pub input: String,
 }
 
@@ -765,7 +769,7 @@ pub struct GptRunServiceResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct GptUserStatusParams {
-    pub session_token: Uuid,
+    pub session_token: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -820,12 +824,12 @@ pub struct GptSession {
 
 #[derive(Debug, Deserialize)]
 pub struct GptPreferencesParams {
-    pub session_token: Uuid,
+    pub session_token: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct GptSetPreferencesRequest {
-    pub session_token: Uuid,
+    pub session_token: Option<Uuid>,
     pub preferences: Vec<TaskPreference>,
 }
 

@@ -411,7 +411,7 @@ fn gpt_types_exist_and_are_constructible() {
 
     // Component 4: Task details
     let _task_params = GptTaskParams {
-        session_token: Uuid::new_v4(),
+        session_token: Some(Uuid::new_v4()),
     };
     let _task_fmt = GptTaskInputFormat {
         task_type: "survey".into(),
@@ -441,7 +441,7 @@ fn gpt_types_exist_and_are_constructible() {
         contact_permission: false,
     };
     let _complete_req = GptCompleteTaskRequest {
-        session_token: Uuid::new_v4(),
+        session_token: Some(Uuid::new_v4()),
         task_name: "survey".into(),
         details: None,
         consent: GptConsentInput {
@@ -460,7 +460,7 @@ fn gpt_types_exist_and_are_constructible() {
 
     // Component 6: Service run
     let _run_req = GptRunServiceRequest {
-        session_token: Uuid::new_v4(),
+        session_token: Some(Uuid::new_v4()),
         input: "test input".into(),
     };
     let _run_resp = GptRunServiceResponse {
@@ -474,7 +474,7 @@ fn gpt_types_exist_and_are_constructible() {
 
     // Component 7: User status
     let _status_params = GptUserStatusParams {
-        session_token: Uuid::new_v4(),
+        session_token: Some(Uuid::new_v4()),
     };
     let _task_summary = GptCompletedTaskSummary {
         campaign_id: Uuid::new_v4(),
@@ -1294,7 +1294,9 @@ async fn gpt_get_tasks_returns_task_details_for_valid_session() {
                 inner: Arc::new(RwLock::new(AppState::new())),
             };
 
-            let params = types::GptTaskParams { session_token };
+            let params = types::GptTaskParams {
+                session_token: Some(session_token),
+            };
             let result = gpt::gpt_get_tasks(
                 axum::extract::State(state),
                 axum::extract::Path(campaign_id),
@@ -1390,7 +1392,9 @@ async fn gpt_get_tasks_shows_already_completed_when_task_done() {
                 inner: Arc::new(RwLock::new(AppState::new())),
             };
 
-            let params = types::GptTaskParams { session_token };
+            let params = types::GptTaskParams {
+                session_token: Some(session_token),
+            };
             let result = gpt::gpt_get_tasks(
                 axum::extract::State(state),
                 axum::extract::Path(campaign_id),
@@ -1460,7 +1464,9 @@ async fn gpt_get_tasks_returns_not_found_for_missing_campaign() {
                 inner: Arc::new(RwLock::new(AppState::new())),
             };
 
-            let params = types::GptTaskParams { session_token };
+            let params = types::GptTaskParams {
+                session_token: Some(session_token),
+            };
             let result = gpt::gpt_get_tasks(
                 axum::extract::State(state),
                 axum::extract::Path(Uuid::new_v4()), // non-existent campaign
@@ -1545,7 +1551,9 @@ async fn gpt_get_tasks_returns_custom_format_from_task_schema() {
                 inner: Arc::new(RwLock::new(AppState::new())),
             };
 
-            let params = types::GptTaskParams { session_token };
+            let params = types::GptTaskParams {
+                session_token: Some(session_token),
+            };
             let result = gpt::gpt_get_tasks(
                 axum::extract::State(state),
                 axum::extract::Path(campaign_id),
@@ -1646,7 +1654,7 @@ async fn gpt_complete_task_records_consent_and_completion() {
             };
 
             let payload = types::GptCompleteTaskRequest {
-                session_token,
+                session_token: Some(session_token),
                 task_name: "fill_survey".to_string(),
                 details: Some("Completed the survey".to_string()),
                 consent: types::GptConsentInput {
@@ -1773,7 +1781,7 @@ async fn gpt_complete_task_handles_consent_refused() {
 
             // data_sharing_agreed = false
             let payload = types::GptCompleteTaskRequest {
-                session_token,
+                session_token: Some(session_token),
                 task_name: "do_task".to_string(),
                 details: None,
                 consent: types::GptConsentInput {
@@ -1896,7 +1904,7 @@ async fn gpt_complete_task_returns_not_found_for_missing_campaign() {
             };
 
             let payload = types::GptCompleteTaskRequest {
-                session_token,
+                session_token: Some(session_token),
                 task_name: "some_task".to_string(),
                 details: None,
                 consent: types::GptConsentInput {
@@ -2006,7 +2014,7 @@ async fn gpt_run_service_sponsored_flow_success() {
             };
 
             let payload = types::GptRunServiceRequest {
-                session_token,
+                session_token: Some(session_token),
                 input: "test design input".to_string(),
             };
 
@@ -2123,7 +2131,7 @@ async fn gpt_run_service_fails_when_task_not_completed() {
             };
 
             let payload = types::GptRunServiceRequest {
-                session_token,
+                session_token: Some(session_token),
                 input: "test".to_string(),
             };
 
@@ -2210,7 +2218,7 @@ async fn gpt_run_service_fails_when_no_matching_campaign() {
             };
 
             let payload = types::GptRunServiceRequest {
-                session_token,
+                session_token: Some(session_token),
                 input: "test".to_string(),
             };
 
@@ -2344,7 +2352,9 @@ async fn gpt_user_status_returns_completed_tasks_and_services() {
                 inner: Arc::new(RwLock::new(AppState::new())),
             };
 
-            let params = types::GptUserStatusParams { session_token };
+            let params = types::GptUserStatusParams {
+                session_token: Some(session_token),
+            };
 
             let result =
                 gpt::gpt_user_status(axum::extract::State(state), axum::extract::Query(params))
@@ -2439,7 +2449,9 @@ async fn gpt_user_status_new_user_no_tasks() {
                 inner: Arc::new(RwLock::new(AppState::new())),
             };
 
-            let params = types::GptUserStatusParams { session_token };
+            let params = types::GptUserStatusParams {
+                session_token: Some(session_token),
+            };
 
             let result =
                 gpt::gpt_user_status(axum::extract::State(state), axum::extract::Query(params))
@@ -2532,7 +2544,7 @@ async fn gpt_run_service_skips_campaign_with_insufficient_budget() {
             };
 
             let payload = types::GptRunServiceRequest {
-                session_token,
+                session_token: Some(session_token),
                 input: "test".to_string(),
             };
 
@@ -2618,7 +2630,9 @@ async fn gpt_user_status_shows_not_ready_for_pending_task() {
                 inner: Arc::new(RwLock::new(AppState::new())),
             };
 
-            let params = types::GptUserStatusParams { session_token };
+            let params = types::GptUserStatusParams {
+                session_token: Some(session_token),
+            };
 
             let result =
                 gpt::gpt_user_status(axum::extract::State(state), axum::extract::Query(params))
@@ -2687,7 +2701,7 @@ async fn gpt_handlers_reject_invalid_session_token() {
                 axum::extract::State(state.clone()),
                 axum::extract::Path(fake_campaign),
                 axum::extract::Query(types::GptTaskParams {
-                    session_token: fake_token,
+                    session_token: Some(fake_token),
                 }),
             )
             .await;
@@ -2709,7 +2723,7 @@ async fn gpt_handlers_reject_invalid_session_token() {
                 axum::extract::State(state.clone()),
                 axum::extract::Path("design".to_string()),
                 axum::Json(types::GptRunServiceRequest {
-                    session_token: fake_token,
+                    session_token: Some(fake_token),
                     input: "test".to_string(),
                 }),
             )
@@ -2723,7 +2737,7 @@ async fn gpt_handlers_reject_invalid_session_token() {
             let result = gpt::gpt_user_status(
                 axum::extract::State(state.clone()),
                 axum::extract::Query(types::GptUserStatusParams {
-                    session_token: fake_token,
+                    session_token: Some(fake_token),
                 }),
             )
             .await;
@@ -2779,7 +2793,7 @@ async fn gpt_complete_task_duplicate_completion_records_second_entry() {
             };
 
             let make_payload = || types::GptCompleteTaskRequest {
-                session_token,
+                session_token: Some(session_token),
                 task_name: "dup_task".to_string(),
                 details: Some("first".to_string()),
                 consent: types::GptConsentInput {
@@ -4020,7 +4034,9 @@ async fn gpt_e2e_flow_search_auth_task_complete_run_status() {
             let result = gpt::gpt_get_tasks(
                 axum::extract::State(state.clone()),
                 axum::extract::Path(campaign_id),
-                axum::extract::Query(types::GptTaskParams { session_token }),
+                axum::extract::Query(types::GptTaskParams {
+                    session_token: Some(session_token),
+                }),
             )
             .await;
             assert!(
@@ -4043,7 +4059,7 @@ async fn gpt_e2e_flow_search_auth_task_complete_run_status() {
                 axum::extract::State(state.clone()),
                 axum::extract::Path(campaign_id),
                 axum::Json(types::GptCompleteTaskRequest {
-                    session_token,
+                    session_token: Some(session_token),
                     task_name: required_task.to_string(),
                     details: Some("E2E test survey response".to_string()),
                     consent: types::GptConsentInput {
@@ -4074,7 +4090,9 @@ async fn gpt_e2e_flow_search_auth_task_complete_run_status() {
             let result = gpt::gpt_get_tasks(
                 axum::extract::State(state.clone()),
                 axum::extract::Path(campaign_id),
-                axum::extract::Query(types::GptTaskParams { session_token }),
+                axum::extract::Query(types::GptTaskParams {
+                    session_token: Some(session_token),
+                }),
             )
             .await;
             assert!(result.status().is_success());
@@ -4089,7 +4107,7 @@ async fn gpt_e2e_flow_search_auth_task_complete_run_status() {
                 axum::extract::State(state.clone()),
                 axum::extract::Path("design".to_string()),
                 axum::Json(types::GptRunServiceRequest {
-                    session_token,
+                    session_token: Some(session_token),
                     input: "E2E test design input".to_string(),
                 }),
             )
@@ -4130,7 +4148,9 @@ async fn gpt_e2e_flow_search_auth_task_complete_run_status() {
             // ========== Step 6: User Status ==========
             let result = gpt::gpt_user_status(
                 axum::extract::State(state.clone()),
-                axum::extract::Query(types::GptUserStatusParams { session_token }),
+                axum::extract::Query(types::GptUserStatusParams {
+                    session_token: Some(session_token),
+                }),
             )
             .await;
             assert!(
@@ -4499,12 +4519,12 @@ fn preference_types_are_constructible() {
 
     // GptPreferencesParams (Deserialize)
     let _params = GptPreferencesParams {
-        session_token: Uuid::new_v4(),
+        session_token: Some(Uuid::new_v4()),
     };
 
     // GptSetPreferencesRequest (Deserialize)
     let _req = GptSetPreferencesRequest {
-        session_token: Uuid::new_v4(),
+        session_token: Some(Uuid::new_v4()),
         preferences: vec![
             TaskPreference {
                 task_type: "survey".into(),
@@ -4787,7 +4807,9 @@ async fn gpt_preferences_integration_crud() {
             // ========== Step 1: GET preferences (empty) ==========
             let result = gpt::gpt_get_preferences(
                 axum::extract::State(state.clone()),
-                axum::extract::Query(types::GptPreferencesParams { session_token }),
+                axum::extract::Query(types::GptPreferencesParams {
+                    session_token: Some(session_token),
+                }),
             )
             .await;
             assert!(
@@ -4813,7 +4835,7 @@ async fn gpt_preferences_integration_crud() {
             let result = gpt::gpt_set_preferences(
                 axum::extract::State(state.clone()),
                 axum::Json(types::GptSetPreferencesRequest {
-                    session_token,
+                    session_token: Some(session_token),
                     preferences: vec![
                         types::TaskPreference {
                             task_type: "survey".into(),
@@ -4843,7 +4865,9 @@ async fn gpt_preferences_integration_crud() {
             // ========== Step 3: GET preferences (should return 3) ==========
             let result = gpt::gpt_get_preferences(
                 axum::extract::State(state.clone()),
-                axum::extract::Query(types::GptPreferencesParams { session_token }),
+                axum::extract::Query(types::GptPreferencesParams {
+                    session_token: Some(session_token),
+                }),
             )
             .await;
             assert!(result.status().is_success());
@@ -4872,7 +4896,7 @@ async fn gpt_preferences_integration_crud() {
             let result = gpt::gpt_set_preferences(
                 axum::extract::State(state.clone()),
                 axum::Json(types::GptSetPreferencesRequest {
-                    session_token,
+                    session_token: Some(session_token),
                     preferences: vec![types::TaskPreference {
                         task_type: "registration".into(),
                         level: "preferred".into(),
@@ -4893,7 +4917,9 @@ async fn gpt_preferences_integration_crud() {
             // Verify overwrite: only 1 preference now
             let result = gpt::gpt_get_preferences(
                 axum::extract::State(state.clone()),
-                axum::extract::Query(types::GptPreferencesParams { session_token }),
+                axum::extract::Query(types::GptPreferencesParams {
+                    session_token: Some(session_token),
+                }),
             )
             .await;
             let resp: types::GptPreferencesResponse = read_typed(result).await;
@@ -4909,7 +4935,7 @@ async fn gpt_preferences_integration_crud() {
             let result = gpt::gpt_get_preferences(
                 axum::extract::State(state.clone()),
                 axum::extract::Query(types::GptPreferencesParams {
-                    session_token: Uuid::new_v4(), // non-existent
+                    session_token: Some(Uuid::new_v4()), // non-existent
                 }),
             )
             .await;
@@ -4975,7 +5001,7 @@ async fn gpt_set_preferences_validates_level() {
             let result = gpt::gpt_set_preferences(
                 axum::extract::State(state.clone()),
                 axum::Json(types::GptSetPreferencesRequest {
-                    session_token,
+                    session_token: Some(session_token),
                     preferences: vec![types::TaskPreference {
                         task_type: "survey".into(),
                         level: "invalid_level".into(),
@@ -6303,7 +6329,7 @@ async fn e2e_smart_suggestion_full_flow() {
             let set_result = gpt::gpt_set_preferences(
                 axum::extract::State(state.clone()),
                 axum::Json(types::GptSetPreferencesRequest {
-                    session_token,
+                    session_token: Some(session_token),
                     preferences: vec![
                         types::TaskPreference {
                             task_type: "survey".to_string(),
@@ -6325,7 +6351,9 @@ async fn e2e_smart_suggestion_full_flow() {
             // Step 2: Verify preferences saved
             let get_result = gpt::gpt_get_preferences(
                 axum::extract::State(state.clone()),
-                axum::extract::Query(types::GptPreferencesParams { session_token }),
+                axum::extract::Query(types::GptPreferencesParams {
+                    session_token: Some(session_token),
+                }),
             )
             .await;
             assert!(

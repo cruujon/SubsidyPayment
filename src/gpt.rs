@@ -14,12 +14,13 @@ use chrono::Utc;
 
 use crate::error::{ApiError, ApiResult};
 use crate::types::{
-    AppliedFilters, Campaign, CampaignRow as FullCampaignRow, GptAuthRequest, GptAuthResponse,
-    GptAvailableService, GptCompleteTaskRequest, GptCompleteTaskResponse, GptCompletedTaskSummary,
-    GptPreferencesParams, GptPreferencesResponse, GptRunServiceRequest, GptRunServiceResponse,
-    GptSearchParams, GptSearchResponse, GptServiceItem, GptSetPreferencesRequest,
-    GptSetPreferencesResponse, GptTaskInputFormat, GptTaskParams, GptTaskResponse,
-    GptUserStatusParams, GptUserStatusResponse, SharedState, TaskPreference, UserProfile,
+    AppConfig, AppliedFilters, Campaign, CampaignRow as FullCampaignRow, GptAuthRequest,
+    GptAuthResponse, GptAvailableService, GptCompleteTaskRequest, GptCompleteTaskResponse,
+    GptCompletedTaskSummary, GptPreferencesParams, GptPreferencesResponse, GptRunServiceRequest,
+    GptRunServiceResponse, GptSearchParams, GptSearchResponse, GptServiceItem,
+    GptSetPreferencesRequest, GptSetPreferencesResponse, GptTaskInputFormat, GptTaskParams,
+    GptTaskResponse, GptUserStatusParams, GptUserStatusResponse, SharedState, TaskPreference,
+    UserProfile,
 };
 use crate::utils::respond;
 
@@ -127,6 +128,55 @@ pub async fn resolve_session(db: &PgPool, session_token: Uuid) -> ApiResult<Uuid
     .map_err(|e| ApiError::internal(format!("session lookup failed: {e}")))?;
 
     row.ok_or_else(|| ApiError::unauthorized("invalid or expired session token"))
+}
+
+const ANONYMOUS_USER_EMAIL: &str = "anonymous@gpt-apps.local";
+
+async fn ensure_anonymous_user(db: &PgPool) -> ApiResult<Uuid> {
+    let existing: Option<Uuid> =
+        sqlx::query_scalar("SELECT id FROM users WHERE email = $1 AND source = 'anonymous'")
+            .bind(ANONYMOUS_USER_EMAIL)
+            .fetch_optional(db)
+            .await
+            .map_err(|e| ApiError::internal(format!("anonymous user lookup failed: {e}")))?;
+
+    if let Some(id) = existing {
+        return Ok(id);
+    }
+
+    let id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO users (id, email, region, roles, tools_used, attributes, created_at, source) \
+         VALUES ($1, $2, 'global', '{}', '{}', '{}'::jsonb, NOW(), 'anonymous')",
+    )
+    .bind(id)
+    .bind(ANONYMOUS_USER_EMAIL)
+    .execute(db)
+    .await
+    .map_err(|e| ApiError::internal(format!("anonymous user creation failed: {e}")))?;
+
+    Ok(id)
+}
+
+/// Resolve user_id from session token, or return anonymous user when session auth is disabled.
+pub async fn resolve_session_optional(
+    db: &PgPool,
+    config: &AppConfig,
+    session_token: Option<Uuid>,
+) -> ApiResult<Uuid> {
+    if config.gpt_session_required {
+        let token =
+            session_token.ok_or_else(|| ApiError::unauthorized("session_token is required"))?;
+        resolve_session(db, token).await
+    } else {
+        // Auth disabled: if token provided try to resolve, otherwise use anonymous
+        if let Some(token) = session_token
+            && let Ok(user_id) = resolve_session(db, token).await
+        {
+            return Ok(user_id);
+        }
+        ensure_anonymous_user(db).await
+    }
 }
 
 pub async fn gpt_search_services(
@@ -245,8 +295,9 @@ pub async fn gpt_search_services(
 
     // 嗜好フィルタ (要件 4.1–4.3): session_token がある場合に嗜好を適用
     let mut preferences_applied = false;
-    let preferences: Vec<TaskPreference> = if let Some(session_token) = params.session_token {
-        let user_id = resolve_session(&db, session_token).await?;
+    let config = { state.inner.read().await.config.clone() };
+    let preferences: Vec<TaskPreference> = if params.session_token.is_some() {
+        let user_id = resolve_session_optional(&db, &config, params.session_token).await?;
         let rows = sqlx::query_as::<_, TaskPreferenceRow>(
             "SELECT task_type, level, updated_at FROM user_task_preferences \
              WHERE user_id = $1 ORDER BY task_type",
@@ -598,13 +649,16 @@ pub async fn gpt_get_tasks(
 ) -> Response {
     let metrics = { state.inner.read().await.metrics.clone() };
     let result: ApiResult<Json<GptTaskResponse>> = async {
-        let db = {
+        let (db, config) = {
             let s = state.inner.read().await;
-            s.db.clone()
-                .ok_or_else(|| ApiError::internal("database not configured"))?
+            (
+                s.db.clone()
+                    .ok_or_else(|| ApiError::internal("database not configured"))?,
+                s.config.clone(),
+            )
         };
 
-        let user_id = resolve_session(&db, params.session_token).await?;
+        let user_id = resolve_session_optional(&db, &config, params.session_token).await?;
 
         let campaign = sqlx::query_as::<_, CampaignDetailRow>(
             "SELECT id, name, sponsor, required_task, subsidy_per_call_cents, task_schema \
@@ -691,12 +745,15 @@ pub async fn gpt_complete_task(
 ) -> Response {
     let metrics = { state.inner.read().await.metrics.clone() };
     let result: ApiResult<Json<GptCompleteTaskResponse>> = async {
-    let db = {
+    let (db, config) = {
         let s = state.inner.read().await;
-        s.db.clone().ok_or_else(|| ApiError::internal("database not configured"))?
+        (
+            s.db.clone().ok_or_else(|| ApiError::internal("database not configured"))?,
+            s.config.clone(),
+        )
     };
 
-    let user_id = resolve_session(&db, payload.session_token).await?;
+    let user_id = resolve_session_optional(&db, &config, payload.session_token).await?;
 
     // Verify campaign exists
     let campaign_exists = sqlx::query_scalar::<_, bool>(
@@ -777,14 +834,14 @@ pub async fn gpt_run_service(
 ) -> Response {
     let metrics = { state.inner.read().await.metrics.clone() };
     let result: ApiResult<Json<GptRunServiceResponse>> = async {
-    let (db, price) = {
+    let (db, price, config) = {
         let s = state.inner.read().await;
         let db = s.db.clone().ok_or_else(|| ApiError::internal("database not configured"))?;
         let price = s.service_price(&service);
-        (db, price)
+        (db, price, s.config.clone())
     };
 
-    let user_id = resolve_session(&db, payload.session_token).await?;
+    let user_id = resolve_session_optional(&db, &config, payload.session_token).await?;
 
     // Load user profile
     let user = sqlx::query_as::<_, UserProfile>(
@@ -925,13 +982,16 @@ pub async fn gpt_user_status(
 ) -> Response {
     let metrics = { state.inner.read().await.metrics.clone() };
     let result: ApiResult<Json<GptUserStatusResponse>> = async {
-        let db = {
+        let (db, config) = {
             let s = state.inner.read().await;
-            s.db.clone()
-                .ok_or_else(|| ApiError::internal("database not configured"))?
+            (
+                s.db.clone()
+                    .ok_or_else(|| ApiError::internal("database not configured"))?,
+                s.config.clone(),
+            )
         };
 
-        let user_id = resolve_session(&db, params.session_token).await?;
+        let user_id = resolve_session_optional(&db, &config, params.session_token).await?;
 
         // Load user profile
         let user = sqlx::query_as::<_, UserProfile>(
@@ -1052,13 +1112,16 @@ pub async fn gpt_get_preferences(
 ) -> Response {
     let metrics = { state.inner.read().await.metrics.clone() };
     let result: ApiResult<Json<GptPreferencesResponse>> = async {
-        let db = {
+        let (db, config) = {
             let s = state.inner.read().await;
-            s.db.clone()
-                .ok_or_else(|| ApiError::internal("database not configured"))?
+            (
+                s.db.clone()
+                    .ok_or_else(|| ApiError::internal("database not configured"))?,
+                s.config.clone(),
+            )
         };
 
-        let user_id = resolve_session(&db, params.session_token).await?;
+        let user_id = resolve_session_optional(&db, &config, params.session_token).await?;
 
         let rows = sqlx::query_as::<_, TaskPreferenceRow>(
             "SELECT task_type, level, updated_at FROM user_task_preferences \
@@ -1105,13 +1168,16 @@ pub async fn gpt_set_preferences(
 ) -> Response {
     let metrics = { state.inner.read().await.metrics.clone() };
     let result: ApiResult<Json<GptSetPreferencesResponse>> = async {
-        let db = {
+        let (db, config) = {
             let s = state.inner.read().await;
-            s.db.clone()
-                .ok_or_else(|| ApiError::internal("database not configured"))?
+            (
+                s.db.clone()
+                    .ok_or_else(|| ApiError::internal("database not configured"))?,
+                s.config.clone(),
+            )
         };
 
-        let user_id = resolve_session(&db, payload.session_token).await?;
+        let user_id = resolve_session_optional(&db, &config, payload.session_token).await?;
 
         // Validate preference levels
         for pref in &payload.preferences {
