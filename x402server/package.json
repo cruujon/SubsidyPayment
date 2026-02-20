@@ -1,30 +1,30 @@
 {
-  "name": "x402server",
+  "name": "@x402/hono-server-example",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx ./src/index.ts",
-    "build": "tsc",
-    "start": "node --experimental-modules --es-module-specifier-resolution=node ./dist/index.js",
-    "docker:build": "docker build --platform linux/amd64 -t x402-backend-api .",
-    "docker:run": "docker run -p 4021:4021 --env-file .env backend-api"
+    "dev": "tsx src/index.ts",
+    "demo": "tsx src/demo/sample-client.ts",
+    "format": "pnpm exec biome format --write ."
   },
   "dependencies": {
-    "@hono/node-server": "^1.13.8",
+    "@hono/node-server": "^1.14.0",
+    "@x402/axios": "^2.3.0",
+    "@x402/core": "latest",
+    "@x402/evm": "latest",
+    "@x402/extensions": "latest",
+    "@x402/hono": "latest",
+    "@x402/paywall": "^2.3.0",
+    "@x402/svm": "latest",
+    "axios": "^1.13.5",
     "dotenv": "^16.4.7",
     "hono": "^4.7.1",
-    "node-fetch": "^3.3.2",
-    "x402": "^0.3.5",
-    "x402-hono": "latest"
+    "viem": "^2.46.2"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.3",
     "@eslint/js": "^9.24.0",
-    "@typescript-eslint/eslint-plugin": "^8.29.1",
-    "@typescript-eslint/parser": "^8.29.1",
-    "eslint": "^9.24.0",
-    "eslint-plugin-import": "^2.31.0",
-    "eslint-plugin-jsdoc": "^50.6.9",
-    "eslint-plugin-prettier": "^5.2.6",
+    "@types/express": "^5.0.1",
     "tsup": "^7.2.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.0"

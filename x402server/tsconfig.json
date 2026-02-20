@@ -9,8 +9,14 @@
     "strict": true,
     "resolveJsonModule": true,
     "baseUrl": ".",
-    "types": ["node"],
-    "outDir": "dist"
+    "types": ["node"]
   },
-  "include": ["src/**/*"]
+  "include": [
+    "index.ts",
+    "bazaar.ts",
+    "custom-money-definition.ts",
+    "dynamic-pay-to.ts",
+    "dynamic-price.ts",
+    "hooks.ts"
+  ]
 }
