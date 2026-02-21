@@ -302,6 +302,9 @@ function App() {
   const [showServiceDropdown, setShowServiceDropdown] = useState(false);
   const [dashboardMode, setDashboardMode] = useState<"general" | "user">("general");
   const [dataWarnings, setDataWarnings] = useState<string[]>([]);
+  const [currentUserEmail, setCurrentUserEmail] = useState(() => {
+    return localStorage.getItem("currentUserEmail") || "";
+  });
 
   const apiBaseUrl = useMemo(() => {
     const configured = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
@@ -474,8 +477,11 @@ function App() {
     e.preventDefault();
     // Simple login - in production, this would call an API
     if (loginForm.email && loginForm.password) {
+      const normalizedEmail = loginForm.email.trim().toLowerCase();
       setIsLoggedIn(true);
       localStorage.setItem("isLoggedIn", "true");
+      localStorage.setItem("currentUserEmail", normalizedEmail);
+      setCurrentUserEmail(normalizedEmail);
       setShowProfile(true);
       setLoginForm({ email: "", password: "" });
       // If we were trying to create a campaign, go there after login
@@ -490,6 +496,8 @@ function App() {
   const handleLogout = () => {
     setIsLoggedIn(false);
     localStorage.setItem("isLoggedIn", "false");
+    localStorage.removeItem("currentUserEmail");
+    setCurrentUserEmail("");
     setShowProfile(false);
     setCurrentView("landing"); // Show landing page after logout
   };
@@ -719,7 +727,11 @@ function App() {
   }, [campaigns, profiles, creator, campaignDashboards]);
 
   const userDashboardStats = useMemo(() => {
-    const sortedProfiles = [...profiles].sort(
+    const scopedProfiles = currentUserEmail
+      ? profiles.filter((profile) => profile.email.toLowerCase() === currentUserEmail.toLowerCase())
+      : profiles;
+
+    const sortedProfiles = [...scopedProfiles].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
     const recentProfiles = sortedProfiles.slice(0, 8);
@@ -728,7 +740,7 @@ function App() {
     const roleMap = new Map<string, number>();
     const toolMap = new Map<string, number>();
 
-    profiles.forEach((profile) => {
+    scopedProfiles.forEach((profile) => {
       const region = (profile.region || "unknown").toUpperCase();
       regionMap.set(region, (regionMap.get(region) ?? 0) + 1);
 
@@ -755,17 +767,18 @@ function App() {
     const topRoles = toTopRows(roleMap, 6);
     const topTools = toTopRows(toolMap, 8);
 
-    const totalToolsAssigned = profiles.reduce((acc, profile) => acc + profile.tools_used.length, 0);
-    const avgToolsPerUser = profiles.length > 0 ? totalToolsAssigned / profiles.length : 0;
-    const usersWithDevRoles = profiles.filter((profile) =>
+    const totalToolsAssigned = scopedProfiles.reduce((acc, profile) => acc + profile.tools_used.length, 0);
+    const avgToolsPerUser = scopedProfiles.length > 0 ? totalToolsAssigned / scopedProfiles.length : 0;
+    const usersWithDevRoles = scopedProfiles.filter((profile) =>
       profile.roles.some((role) => {
         const normalized = role.toLowerCase();
         return normalized.includes("dev") || normalized.includes("builder") || normalized.includes("engineer");
       })
     ).length;
-    const devRoleShare = profiles.length > 0 ? (usersWithDevRoles / profiles.length) * 100 : 0;
+    const devRoleShare = scopedProfiles.length > 0 ? (usersWithDevRoles / scopedProfiles.length) * 100 : 0;
 
     return {
+      scopedProfilesCount: scopedProfiles.length,
       recentProfiles,
       topRegions,
       topRoles,
@@ -773,7 +786,7 @@ function App() {
       avgToolsPerUser,
       devRoleShare
     };
-  }, [profiles]);
+  }, [profiles, currentUserEmail]);
 
   async function onCreateCampaign(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1130,8 +1143,11 @@ function App() {
                   return;
                 }
                 setError(null);
+                const normalizedEmail = signupForm.email.trim().toLowerCase();
                 setIsLoggedIn(true);
                 localStorage.setItem("isLoggedIn", "true");
+                localStorage.setItem("currentUserEmail", normalizedEmail);
+                setCurrentUserEmail(normalizedEmail);
                 setSignupForm({ email: "", company: "", password: "", confirmPassword: "" });
                 setCurrentView("create-campaign");
               }}>
@@ -2031,11 +2047,18 @@ function App() {
                 </>
               ) : (
                 <>
+                  <section className="user-scope-banner">
+                    <strong>Scope:</strong>{" "}
+                    {currentUserEmail ? `User ${currentUserEmail}` : "All users (no login email scope)"}
+                    {" · "}
+                    {userDashboardStats.scopedProfilesCount} profile(s) matched
+                  </section>
+
                   <div className="metrics-row">
                     <div className="metric-card">
                       <div className="metric-card-label">Registered Users</div>
-                      <div className="metric-card-value">{dashboardStats.userCount}</div>
-                      <div className="metric-card-sub">Live profiles loaded from backend</div>
+                      <div className="metric-card-value">{userDashboardStats.scopedProfilesCount}</div>
+                      <div className="metric-card-sub">Profiles in current scope</div>
                     </div>
                     <div className="metric-card">
                       <div className="metric-card-label">Avg Tools Per User</div>
@@ -2060,7 +2083,7 @@ function App() {
                               <div
                                 className="ranking-bar-fill"
                                 style={{
-                                  width: `${dashboardStats.userCount > 0 ? (entry.value / dashboardStats.userCount) * 100 : 0}%`
+                                  width: `${userDashboardStats.scopedProfilesCount > 0 ? (entry.value / userDashboardStats.scopedProfilesCount) * 100 : 0}%`
                                 }}
                               ></div>
                             </div>
@@ -2085,7 +2108,7 @@ function App() {
                               <div
                                 className="ranking-bar-fill"
                                 style={{
-                                  width: `${dashboardStats.userCount > 0 ? (entry.value / dashboardStats.userCount) * 100 : 0}%`
+                                  width: `${userDashboardStats.scopedProfilesCount > 0 ? (entry.value / userDashboardStats.scopedProfilesCount) * 100 : 0}%`
                                 }}
                               ></div>
                             </div>
@@ -2112,7 +2135,7 @@ function App() {
                             <div
                               className="ranking-bar-fill"
                               style={{
-                                width: `${dashboardStats.userCount > 0 ? (entry.value / dashboardStats.userCount) * 100 : 0}%`
+                                width: `${userDashboardStats.scopedProfilesCount > 0 ? (entry.value / userDashboardStats.scopedProfilesCount) * 100 : 0}%`
                               }}
                             ></div>
                           </div>
