@@ -41,3 +41,15 @@ npx @modelcontextprotocol/inspector
 # ngrok(test for GPT App)
 ngrok http 3001
 ```
+
+if you don't setup local db.  
+Please run these commands
+
+```bash
+docker compose -f docker-compose.postgres.yml up -d
+
+source .env
+sqlx migrate run
+# Check
+sqlx migrate info
+```
