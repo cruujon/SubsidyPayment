@@ -288,6 +288,7 @@ function App() {
   const [callerLoading, setCallerLoading] = useState(false);
   const [callerResult, setCallerResult] = useState<any>(null);
   const [callerError, setCallerError] = useState<string | null>(null);
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [callerForm, setCallerForm] = useState({
     callType: "proxy" as "proxy" | "tool" | "sponsored-api",
     service: "",
@@ -299,6 +300,18 @@ function App() {
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [selectedKpi, setSelectedKpi] = useState("");
   const [showServiceDropdown, setShowServiceDropdown] = useState(false);
+
+  const apiBaseUrl = useMemo(() => {
+    const configured = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+    if (configured) {
+      return configured.replace(/\/+$/, "");
+    }
+    const hostname = window.location.hostname;
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return "/api";
+    }
+    return "https://subsidypayment-1k0h.onrender.com";
+  }, []);
 
   // サービスが選択されたときに、serviceConfigsを更新
   useEffect(() => {
@@ -326,21 +339,24 @@ function App() {
   }, [selectedServices]);
 
   async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-    // 環境変数からAPIのベースURLを取得（開発環境では /api、本番環境では環境変数から）
-    const apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
-    
     // ウォレットアドレスを取得（ログインしている場合）
     const walletAddress = localStorage.getItem("walletAddress");
-    
-    // GETリクエストの場合、ウォレットアドレスをクエリパラメータとして追加
+
+    // GET /campaigns のみ、ログイン時にウォレットで絞り込み
     let url = `${apiBaseUrl}${path}`;
-    if (walletAddress && (!init || !init.method || init.method === "GET")) {
+    if (
+      isLoggedIn &&
+      walletAddress &&
+      (!init || !init.method || init.method === "GET") &&
+      path.startsWith("/campaigns")
+    ) {
       const separator = path.includes("?") ? "&" : "?";
       url = `${apiBaseUrl}${path}${separator}sponsor_wallet_address=${encodeURIComponent(walletAddress)}`;
     }
-    
+
     const response = await fetch(url, {
       ...init,
+      cache: "no-store",
       headers: {
         "content-type": "application/json",
         ...(init?.headers ?? {})
@@ -387,6 +403,7 @@ function App() {
       setProfiles(profileData);
       setCreator(creatorData);
       setCampaignDashboards(nextCampaignDashboards);
+      setLastSyncAt(new Date().toISOString());
     } catch (err) {
       // Only show error if not silent mode (for user-initiated actions)
       if (!silent) {
@@ -397,6 +414,7 @@ function App() {
         setProfiles([]);
         setCreator(null);
         setCampaignDashboards({});
+        setLastSyncAt(null);
       }
     } finally {
       setLoading(false);
@@ -984,15 +1002,15 @@ function App() {
 
           <section className="lp-stats">
             <div className="lp-stat">
-              <span className="lp-stat-value">$12,450</span>
+              <span className="lp-stat-value">${(dashboardStats.remainingBudgetCents / 100).toFixed(0)}</span>
               <span className="lp-stat-label">Active Subsidies</span>
             </div>
             <div className="lp-stat">
-              <span className="lp-stat-value">1,247</span>
+              <span className="lp-stat-value">{dashboardStats.userCount}</span>
               <span className="lp-stat-label">Developers</span>
             </div>
             <div className="lp-stat">
-              <span className="lp-stat-value">96.2%</span>
+              <span className="lp-stat-value">{(dashboardStats.completionRate * 100).toFixed(1)}%</span>
               <span className="lp-stat-label">Completion Rate</span>
             </div>
           </section>
@@ -1570,6 +1588,22 @@ function App() {
       ) : (
         /* Dashboard */
         <main className="main-content">
+          <section className="data-source-banner">
+            <div className="data-source-title">
+              <span className="pulse-dot"></span>
+              Live Backend Data
+            </div>
+            <div className="data-source-meta">
+              <span>API: {apiBaseUrl}</span>
+              <span>Campaigns: {dashboardStats.campaignCount}</span>
+              <span>Profiles: {dashboardStats.userCount}</span>
+              <span>
+                Last Sync:{" "}
+                {lastSyncAt ? new Date(lastSyncAt).toLocaleString() : "not synced"}
+              </span>
+            </div>
+          </section>
+
           {/* A. Top Metrics Row */}
           <div className="metrics-row">
             <div className="metric-card">
