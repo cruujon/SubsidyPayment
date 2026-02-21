@@ -2039,7 +2039,7 @@ async fn creator_metrics(State(state): State<SharedState>) -> Response {
                 skill_name,
                 count(*) as total_events,
                 count(*) filter (where success = true) as success_events,
-                avg(duration_ms) as avg_duration_ms,
+                avg(duration_ms)::double precision as avg_duration_ms,
                 max(created_at) as last_seen_at
             from creator_events
             group by skill_name
