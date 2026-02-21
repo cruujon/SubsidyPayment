@@ -14,7 +14,7 @@ async function readWidgetHtml(fileName: string): Promise<string> {
     return await readFile(resolve(widgetsDistDir, fileName), 'utf8');
   } catch (error: any) {
     if (error?.code === 'ENOENT') {
-      return readFile(resolve(widgetsDistDir, 'src/widgets/src', fileName), 'utf8');
+      return readFile(resolve(__dirname, 'src', fileName), 'utf8');
     }
     throw error;
   }
