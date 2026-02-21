@@ -300,6 +300,8 @@ function App() {
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [selectedKpi, setSelectedKpi] = useState("");
   const [showServiceDropdown, setShowServiceDropdown] = useState(false);
+  const [dashboardMode, setDashboardMode] = useState<"general" | "user">("general");
+  const [dataWarnings, setDataWarnings] = useState<string[]>([]);
 
   const apiBaseUrl = useMemo(() => {
     const configured = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
@@ -374,15 +376,30 @@ function App() {
   async function loadDashboard(silent = false) {
     setLoading(true);
     if (!silent) {
-    setError(null);
+      setError(null);
     }
 
     try {
-      const [campaignData, profileData, creatorData] = await Promise.all([
+      const [campaignResult, profileResult, creatorResult] = await Promise.allSettled([
         fetchJson<Campaign[]>("/campaigns", { method: "GET" }),
         fetchJson<Profile[]>("/profiles", { method: "GET" }),
         fetchJson<CreatorSummary>("/creator/metrics", { method: "GET" })
       ]);
+
+      const warnings: string[] = [];
+      const campaignData = campaignResult.status === "fulfilled" ? campaignResult.value : [];
+      const profileData = profileResult.status === "fulfilled" ? profileResult.value : [];
+      const creatorData = creatorResult.status === "fulfilled" ? creatorResult.value : null;
+
+      if (campaignResult.status === "rejected") {
+        warnings.push("Could not load campaigns.");
+      }
+      if (profileResult.status === "rejected") {
+        warnings.push("Could not load user profiles.");
+      }
+      if (creatorResult.status === "rejected") {
+        warnings.push("Creator metrics endpoint is unavailable right now.");
+      }
 
       const dashboardResults = await Promise.allSettled(
         campaignData.map((campaign) =>
@@ -393,29 +410,33 @@ function App() {
       );
 
       const nextCampaignDashboards: Record<string, SponsorDashboardData> = {};
+      let dashboardFailures = 0;
       dashboardResults.forEach((result, index) => {
         if (result.status === "fulfilled") {
           nextCampaignDashboards[campaignData[index].id] = result.value;
+        } else {
+          dashboardFailures += 1;
         }
       });
+      if (dashboardFailures > 0) {
+        warnings.push(`Some sponsor dashboard rows failed to load (${dashboardFailures}).`);
+      }
 
       setCampaigns(campaignData);
       setProfiles(profileData);
       setCreator(creatorData);
       setCampaignDashboards(nextCampaignDashboards);
+      setDataWarnings(warnings);
       setLastSyncAt(new Date().toISOString());
-    } catch (err) {
-      // Only show error if not silent mode (for user-initiated actions)
-      if (!silent) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-      } else {
-        // Silent mode: just set empty data, don't show error
-        setCampaigns([]);
-        setProfiles([]);
-        setCreator(null);
-        setCampaignDashboards({});
-        setLastSyncAt(null);
+
+      if (!silent && campaignData.length === 0 && profileData.length === 0 && warnings.length > 0) {
+        setError("Backend responded with partial/empty data. Check API health and DB records.");
       }
+    } catch (err) {
+      if (!silent) {
+        setError(err instanceof Error ? err.message : "Unknown error");
+      }
+      setDataWarnings(["Unexpected dashboard load error."]);
     } finally {
       setLoading(false);
     }
@@ -696,6 +717,63 @@ function App() {
       userToolRanking
     };
   }, [campaigns, profiles, creator, campaignDashboards]);
+
+  const userDashboardStats = useMemo(() => {
+    const sortedProfiles = [...profiles].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    const recentProfiles = sortedProfiles.slice(0, 8);
+
+    const regionMap = new Map<string, number>();
+    const roleMap = new Map<string, number>();
+    const toolMap = new Map<string, number>();
+
+    profiles.forEach((profile) => {
+      const region = (profile.region || "unknown").toUpperCase();
+      regionMap.set(region, (regionMap.get(region) ?? 0) + 1);
+
+      profile.roles.forEach((role) => {
+        const key = role.trim().toLowerCase();
+        if (!key) return;
+        roleMap.set(key, (roleMap.get(key) ?? 0) + 1);
+      });
+
+      profile.tools_used.forEach((tool) => {
+        const key = tool.trim().toLowerCase();
+        if (!key) return;
+        toolMap.set(key, (toolMap.get(key) ?? 0) + 1);
+      });
+    });
+
+    const toTopRows = (map: Map<string, number>, limit = 6) =>
+      Array.from(map.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, limit)
+        .map(([label, value]) => ({ label, value }));
+
+    const topRegions = toTopRows(regionMap, 5);
+    const topRoles = toTopRows(roleMap, 6);
+    const topTools = toTopRows(toolMap, 8);
+
+    const totalToolsAssigned = profiles.reduce((acc, profile) => acc + profile.tools_used.length, 0);
+    const avgToolsPerUser = profiles.length > 0 ? totalToolsAssigned / profiles.length : 0;
+    const usersWithDevRoles = profiles.filter((profile) =>
+      profile.roles.some((role) => {
+        const normalized = role.toLowerCase();
+        return normalized.includes("dev") || normalized.includes("builder") || normalized.includes("engineer");
+      })
+    ).length;
+    const devRoleShare = profiles.length > 0 ? (usersWithDevRoles / profiles.length) * 100 : 0;
+
+    return {
+      recentProfiles,
+      topRegions,
+      topRoles,
+      topTools,
+      avgToolsPerUser,
+      devRoleShare
+    };
+  }, [profiles]);
 
   async function onCreateCampaign(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1226,16 +1304,16 @@ function App() {
             <div className="card create-campaign-card">
               <div className="card-content">
                 {error && <div className="error-message">{error}</div>}
-                <div className="profile-card">
-                  <div className="profile-avatar">
+                <div className="creator-summary-card">
+                  <div className="creator-summary-avatar">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                       <circle cx="12" cy="7" r="4"></circle>
                     </svg>
                   </div>
-                  <div className="profile-details">
+                  <div className="creator-summary-details">
                     <h4>Your Profile</h4>
-                    <div className="profile-stats">
+                    <div className="creator-summary-stats">
                       <span>Active: {dashboardStats.activeCampaigns}</span>
                       <span>Total: {dashboardStats.campaignCount}</span>
                       <span>Budget: ${(dashboardStats.remainingBudgetCents / 100).toFixed(2)}</span>
@@ -1604,6 +1682,53 @@ function App() {
             </div>
           </section>
 
+          {dataWarnings.length > 0 && (
+            <section className="data-warning-banner">
+              {dataWarnings.join(" ")}
+            </section>
+          )}
+
+          <section className="dashboard-view-switch">
+            <button
+              className={`view-switch-btn ${dashboardMode === "general" ? "active" : ""}`}
+              onClick={() => setDashboardMode("general")}
+            >
+              General Dashboard
+            </button>
+            <button
+              className={`view-switch-btn ${dashboardMode === "user" ? "active" : ""}`}
+              onClick={() => setDashboardMode("user")}
+            >
+              User Dashboard
+            </button>
+          </section>
+
+          <div className="dashboard-layout">
+            <aside className="dashboard-sidebar">
+              <div className="sidebar-card">
+                <h4>Overview</h4>
+                <p>Campaigns: {dashboardStats.campaignCount}</p>
+                <p>Active: {dashboardStats.activeCampaigns}</p>
+                <p>Profiles: {dashboardStats.userCount}</p>
+                <p>Calls: {dashboardStats.totalSponsoredCalls}</p>
+              </div>
+              <div className="sidebar-card">
+                <h4>Quick Actions</h4>
+                <button className="sidebar-action-btn" onClick={() => void loadDashboard(false)}>Refresh Data</button>
+                <button className="sidebar-action-btn" onClick={() => setCurrentView("caller")}>Open API Caller</button>
+                <button
+                  className="sidebar-action-btn"
+                  onClick={() => setCurrentView(isLoggedIn ? "create-campaign" : "login")}
+                >
+                  Create Campaign
+                </button>
+              </div>
+            </aside>
+
+            <section className="dashboard-main">
+              {dashboardMode === "general" ? (
+                <>
+
           {/* A. Top Metrics Row */}
           <div className="metrics-row">
             <div className="metric-card">
@@ -1903,6 +2028,142 @@ function App() {
               </table>
             </div>
             </div>
+                </>
+              ) : (
+                <>
+                  <div className="metrics-row">
+                    <div className="metric-card">
+                      <div className="metric-card-label">Registered Users</div>
+                      <div className="metric-card-value">{dashboardStats.userCount}</div>
+                      <div className="metric-card-sub">Live profiles loaded from backend</div>
+                    </div>
+                    <div className="metric-card">
+                      <div className="metric-card-label">Avg Tools Per User</div>
+                      <div className="metric-card-value">{userDashboardStats.avgToolsPerUser.toFixed(1)}</div>
+                      <div className="metric-card-sub">Average number of tools users already use</div>
+                    </div>
+                    <div className="metric-card">
+                      <div className="metric-card-label">Builder/Dev Share</div>
+                      <div className="metric-card-value">{userDashboardStats.devRoleShare.toFixed(1)}%</div>
+                      <div className="metric-card-sub">Users with developer or builder roles</div>
+                    </div>
+                  </div>
+
+                  <div className="two-col-row">
+                    <div className="card">
+                      <div className="card-header"><div className="card-title"><h3>Top Regions</h3></div></div>
+                      <div className="card-content">
+                        {userDashboardStats.topRegions.map((entry) => (
+                          <div key={entry.label} className="ranking-item">
+                            <span className="ranking-name">{entry.label}</span>
+                            <div className="ranking-bar-bg">
+                              <div
+                                className="ranking-bar-fill"
+                                style={{
+                                  width: `${dashboardStats.userCount > 0 ? (entry.value / dashboardStats.userCount) * 100 : 0}%`
+                                }}
+                              ></div>
+                            </div>
+                            <span className="ranking-pct">{entry.value}</span>
+                          </div>
+                        ))}
+                        {userDashboardStats.topRegions.length === 0 && (
+                          <div className="ranking-item">
+                            <span className="ranking-name">No profile region data yet.</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="card">
+                      <div className="card-header"><div className="card-title"><h3>Top User Roles</h3></div></div>
+                      <div className="card-content">
+                        {userDashboardStats.topRoles.map((entry) => (
+                          <div key={entry.label} className="ranking-item">
+                            <span className="ranking-name">{entry.label}</span>
+                            <div className="ranking-bar-bg">
+                              <div
+                                className="ranking-bar-fill"
+                                style={{
+                                  width: `${dashboardStats.userCount > 0 ? (entry.value / dashboardStats.userCount) * 100 : 0}%`
+                                }}
+                              ></div>
+                            </div>
+                            <span className="ranking-pct">{entry.value}</span>
+                          </div>
+                        ))}
+                        {userDashboardStats.topRoles.length === 0 && (
+                          <div className="ranking-item">
+                            <span className="ranking-name">No user role data yet.</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card full-width">
+                    <div className="card-header"><div className="card-title"><h3>Most Used Tools by Users</h3></div></div>
+                    <div className="card-content">
+                      {userDashboardStats.topTools.map((entry, index) => (
+                        <div key={`${entry.label}-${index}`} className="ranking-item">
+                          <span className="ranking-number">{index + 1}</span>
+                          <span className="ranking-name">{entry.label}</span>
+                          <div className="ranking-bar-bg">
+                            <div
+                              className="ranking-bar-fill"
+                              style={{
+                                width: `${dashboardStats.userCount > 0 ? (entry.value / dashboardStats.userCount) * 100 : 0}%`
+                              }}
+                            ></div>
+                          </div>
+                          <span className="ranking-pct">{entry.value}</span>
+                        </div>
+                      ))}
+                      {userDashboardStats.topTools.length === 0 && (
+                        <div className="ranking-item">
+                          <span className="ranking-name">No tool usage captured yet.</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="card full-width">
+                    <div className="card-header"><div className="card-title"><h3>Recent Users</h3></div></div>
+                    <div className="table-container">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Email</th>
+                            <th>Region</th>
+                            <th>Roles</th>
+                            <th>Tools Used</th>
+                            <th>Joined</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {userDashboardStats.recentProfiles.length === 0 ? (
+                            <tr>
+                              <td colSpan={5}>No user profiles loaded yet.</td>
+                            </tr>
+                          ) : (
+                            userDashboardStats.recentProfiles.map((profile) => (
+                              <tr key={profile.id}>
+                                <td>{profile.email}</td>
+                                <td>{profile.region}</td>
+                                <td>{profile.roles.join(", ") || "N/A"}</td>
+                                <td>{profile.tools_used.join(", ") || "N/A"}</td>
+                                <td>{new Date(profile.created_at).toLocaleDateString()}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </section>
+          </div>
 
           {/* User Profile Section - Only shown when logged in */}
           {isLoggedIn && showProfile && (
