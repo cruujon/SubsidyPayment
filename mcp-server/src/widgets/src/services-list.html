@@ -230,12 +230,12 @@
       const { app, toolOutput, widgetState } = initWidget();
       const root = document.getElementById('app');
 
-      const structured = toolOutput?.structuredContent ?? {};
-      const candidateServices = Array.isArray(structured.candidate_services) ? structured.candidate_services : [];
-      const services = Array.isArray(structured.services) ? structured.services : [];
-      const serviceCatalog = Array.isArray(structured.service_catalog) ? structured.service_catalog : [];
+      const structuredContent = toolOutput?.structuredContent ?? {};
+      const candidateServices = Array.isArray(structuredContent.candidate_services) ? structuredContent.candidate_services : [];
+      const services = Array.isArray(structuredContent.services) ? structuredContent.services : [];
+      const serviceCatalog = Array.isArray(structuredContent.service_catalog) ? structuredContent.service_catalog : [];
       const selectedServiceKey = typeof widgetState?.selectedServiceKey === 'string' ? widgetState.selectedServiceKey : '';
-      const keyword = typeof structured?.applied_filters?.keyword === 'string' ? structured.applied_filters.keyword : '';
+      const keyword = typeof structuredContent?.applied_filters?.keyword === 'string' ? structuredContent.applied_filters.keyword : '';
 
       function escapeHtml(value) {
         return String(value ?? '')
@@ -271,16 +271,21 @@
         if (candidateServices.length > 0) {
           return candidateServices.map((candidate) => {
             const offers = Array.isArray(candidate.offers) ? candidate.offers : [];
+            const firstOffer = offers[0] ?? null;
             const requiredTasks = offers
               .map((offer) => offer.required_task)
               .filter((value) => typeof value === 'string' && value.length > 0)
               .slice(0, 3);
 
             return {
+              campaign_id: firstOffer?.campaign_id ?? '',
               service_key: candidate.service_key,
               display_name: candidate.display_name ?? toDisplayLabel(candidate.service_key),
               sponsor: offers[0]?.sponsor ?? 'Sponsor',
               description: candidate.reason ?? 'Recommended for your request',
+              subsidy_amount_cents: firstOffer?.subsidy_amount_cents ?? 0,
+              category: [candidate.service_key],
+              relevance_score: null,
               tasks: requiredTasks,
             };
           });
@@ -289,10 +294,14 @@
         return services.map((service) => {
           const tags = Array.isArray(service.tags) ? service.tags : [];
           return {
+            campaign_id: service.service_id,
             service_key: resolveServiceKey(service),
-            display_name: service.name ?? toDisplayLabel(resolveServiceKey(service)),
+            display_name: service.name ?? service.display_name ?? toDisplayLabel(resolveServiceKey(service)),
             sponsor: service.sponsor ?? 'Sponsor',
             description: `Sponsored by ${service.sponsor ?? 'sponsor'}`,
+            subsidy_amount_cents: service.subsidy_amount_cents ?? 0,
+            category: Array.isArray(service.category) ? service.category : [],
+            relevance_score: service.relevance_score ?? null,
             tasks: [service.required_task, ...tags].filter((value) => typeof value === 'string' && value.length > 0).slice(0, 3),
           };
         });
@@ -306,14 +315,15 @@
         return app?.setWidgetState?.(nextState);
       }
 
-      async function selectService(serviceKey, serviceName) {
-        if (!serviceKey) return;
+      async function selectService(campaignId, serviceKey, serviceName) {
+        if (!campaignId) return;
         await setWidgetState({
           ...(widgetState ?? {}),
+          selectedServiceId: campaignId,
           selectedServiceKey: serviceKey,
           selectedServiceName: serviceName,
         });
-        await callTool('get_service_tasks', { service_key: serviceKey });
+        await callTool('get_task_details', { campaign_id: campaignId });
       }
 
       function render() {
@@ -339,7 +349,7 @@
                   .map((token) => token.charAt(0).toUpperCase())
                   .join('');
                 return `
-                  <button class="service-card" data-service-key="${escapeHtml(service.service_key)}" data-service-name="${escapeHtml(service.display_name)}">
+                  <button class="service-card" data-campaign-id="${escapeHtml(service.campaign_id)}" data-service-key="${escapeHtml(service.service_key)}" data-service-name="${escapeHtml(service.display_name)}">
                     <div class="service-row">
                       <div class="service-main">
                         <span class="service-icon">${escapeHtml(initials || 'SV')}</span>
@@ -349,6 +359,11 @@
                         </div>
                       </div>
                       <span class="arrow">&rsaquo;</span>
+                    </div>
+                    <div class="task-tags">
+                      <span class="task-tag">Subsidy ${escapeHtml((Number(service.subsidy_amount_cents || 0) / 100).toFixed(2))} USD</span>
+                      <span class="task-tag">Relevance ${escapeHtml(service.relevance_score ?? '-')}</span>
+                      ${(service.category ?? []).slice(0, 2).map((cat) => `<span class="task-tag">${escapeHtml(cat)}</span>`).join('')}
                     </div>
                     <div class="task-tags">
                       ${service.tasks.length > 0
@@ -387,10 +402,11 @@
 
         for (const card of root.querySelectorAll('.service-card')) {
           card.addEventListener('click', () => {
+            const campaignId = card.getAttribute('data-campaign-id');
             const serviceKey = card.getAttribute('data-service-key');
             const serviceName = card.getAttribute('data-service-name');
-            if (serviceKey) {
-              void selectService(serviceKey, serviceName ?? serviceKey);
+            if (campaignId && serviceKey) {
+              void selectService(campaignId, serviceKey, serviceName ?? serviceKey);
             }
           });
         }
