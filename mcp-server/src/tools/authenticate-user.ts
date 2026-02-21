@@ -2,9 +2,10 @@ import { registerAppTool } from '@modelcontextprotocol/ext-apps/server';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
-import { BackendClient, BackendClientError } from '../backend-client.ts';
 import { TokenVerifier } from '../auth/token-verifier.ts';
+import { BackendClient, BackendClientError } from '../backend-client.ts';
 import type { BackendConfig } from '../config.ts';
+import { RESOURCE_MIME_TYPE, readWidgetHtml } from '../widgets/index.ts';
 import { rememberSessionToken } from './session-manager.ts';
 
 
@@ -113,12 +114,21 @@ export function registerAuthenticateUserTool(server: McpServer, config: BackendC
         });
         rememberSessionToken(context, response.session_token, response.email);
 
+        const html = await readWidgetHtml('user-dashboard.html');
+
         return {
           structuredContent: {
             user_id: response.user_id,
             email: response.email,
             is_new_user: response.is_new_user,
           },
+          contents: [
+            {
+              uri: 'ui://widget/user-dashboard.html',
+              mimeType: RESOURCE_MIME_TYPE,
+              text: html,
+            },
+          ],
           content: [{ type: 'text' as const, text: response.message }],
           _meta: {
             session_token: response.session_token,

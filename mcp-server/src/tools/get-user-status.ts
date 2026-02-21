@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { TokenVerifier } from '../auth/token-verifier.ts';
 import { BackendClient, BackendClientError } from '../backend-client.ts';
 import type { BackendConfig } from '../config.ts';
+import { readWidgetHtml, RESOURCE_MIME_TYPE } from '../widgets/index.ts';
 import { resolveOrCreateNoAuthSessionToken } from './session-manager.ts';
 
 const getUserStatusInputSchema = z.object({
@@ -79,6 +80,8 @@ export function registerGetUserStatusTool(server: McpServer, config: BackendConf
         }
 
         const response = await client.getUserStatus(sessionToken);
+        const html = await readWidgetHtml('user-dashboard.html');
+
         return {
           structuredContent: {
             user_id: response.user_id,
@@ -86,6 +89,13 @@ export function registerGetUserStatusTool(server: McpServer, config: BackendConf
             completed_tasks: response.completed_tasks,
             available_services: response.available_services,
           },
+          contents: [
+            {
+              uri: 'ui://widget/user-dashboard.html',
+              mimeType: RESOURCE_MIME_TYPE,
+              text: html,
+            },
+          ],
           content: [{ type: 'text' as const, text: response.message }],
           _meta: {
             full_response: response,

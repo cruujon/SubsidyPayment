@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { TokenVerifier } from '../auth/token-verifier.ts';
 import { BackendClient, BackendClientError } from '../backend-client.ts';
 import type { BackendConfig } from '../config.ts';
+import { RESOURCE_MIME_TYPE, readWidgetHtml } from '../widgets/index.ts';
 import { resolveOrCreateNoAuthSessionToken } from './session-manager.ts';
 
 const getTaskDetailsInputSchema = z.object({
@@ -80,6 +81,8 @@ export function registerGetTaskDetailsTool(server: McpServer, config: BackendCon
         }
 
         const response = await client.getTaskDetails(input.campaign_id, sessionToken);
+        const html = await readWidgetHtml('task-form.html');
+
         return {
           structuredContent: {
             campaign_id: response.campaign_id,
@@ -91,6 +94,13 @@ export function registerGetTaskDetailsTool(server: McpServer, config: BackendCon
             already_completed: response.already_completed,
             subsidy_amount_cents: response.subsidy_amount_cents,
           },
+          contents: [
+            {
+              uri: 'ui://widget/task-form.html',
+              mimeType: RESOURCE_MIME_TYPE,
+              text: html,
+            },
+          ],
           content: [{ type: 'text' as const, text: response.message }],
           _meta: {
             full_response: response,

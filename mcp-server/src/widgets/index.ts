@@ -1,15 +1,17 @@
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { registerAppResource, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+
+export { registerAppResource, RESOURCE_MIME_TYPE };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const widgetsDistDir = resolve(__dirname, '../../dist/widgets');
 
-async function readWidgetHtml(fileName: string): Promise<string> {
+export async function readWidgetHtml(fileName: string): Promise<string> {
   try {
     return await readFile(resolve(widgetsDistDir, fileName), 'utf8');
   } catch (error: any) {

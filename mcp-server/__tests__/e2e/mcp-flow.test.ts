@@ -56,6 +56,11 @@ vi.mock('../../src/auth/token-verifier.ts', async () => {
   };
 });
 
+vi.mock('../../src/widgets/index.ts', () => ({
+  readWidgetHtml: vi.fn().mockResolvedValue('<html></html>'),
+  RESOURCE_MIME_TYPE: 'text/html;profile=mcp-app',
+}));
+
 import { registerAllTools } from '../../src/tools/index.ts';
 
 const config = {
