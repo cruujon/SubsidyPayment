@@ -1,5 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import logoImage from "./logo.jpg";
+import { GetStartedButton3D } from "./GetStartedButton3D";
+import { LandingBackground3D } from "./LandingBackground3D";
 
 // Extend Window interface for MetaMask
 declare global {
@@ -527,7 +529,7 @@ function App() {
       console.log("Connected wallet:", address);
 
       // Create a message to sign for authentication
-      const message = `Sign in to SubsidyPayment\n\nWallet: ${address}\nTimestamp: ${Date.now()}`;
+      const message = `Sign in to SnapFuel\n\nWallet: ${address}\nTimestamp: ${Date.now()}`;
       
       // Convert message to hex (browser-compatible)
       const messageHex = "0x" + Array.from(new TextEncoder().encode(message))
@@ -975,11 +977,11 @@ function App() {
 
   return (
     <div className="dashboard">
-      <header className="header">
+      <header className={`header ${currentView === "landing" ? "header-landing" : ""}`}>
         <div className="header-left">
-          <div className="logo" onClick={() => setCurrentView(isLoggedIn ? "dashboard" : "landing")} style={{ cursor: "pointer" }}>
-            <img src={logoImage} alt="SubsidyPayment" className="logo-icon" />
-            <span className="logo-text">SubsidyPayment</span>
+          <div className="logo" onClick={() => setCurrentView("landing")} style={{ cursor: "pointer" }} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setCurrentView("landing"); } }} aria-label="Go to home">
+            <img src={logoImage} alt="SnapFuel" className="logo-icon" />
+            <span className="logo-text">SnapFuel</span>
           </div>
           {!["landing", "login", "signup"].includes(currentView) && (
             <nav className="header-nav-tabs">
@@ -990,6 +992,31 @@ function App() {
           )}
         </div>
         <div className="header-right">
+          {currentView === "landing" ? (
+            <>
+              <GetStartedButton3D onClick={() => setCurrentView("signup")} />
+              <button className="icon-btn" onClick={toggleDarkMode} title="Toggle dark mode">
+                {darkMode ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                  </svg>
+                )}
+              </button>
+            </>
+          ) : (
+          <>
           <button className="icon-btn">
             <span className="notification-dot"></span>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1051,23 +1078,43 @@ function App() {
               Logout
             </button>
           )}
+          </>
+          )}
         </div>
       </header>
 
       {currentView === "landing" ? (
-        /* Landing Page */
+        /* Landing Page – minimal, Advanced Team style */
         <main className="landing-page">
+          <LandingBackground3D />
           <section className="lp-hero">
-            <img src={logoImage} alt="SubsidyPayment" className="lp-hero-logo" />
-            <h1 className="lp-hero-title">SubsidyPayment</h1>
-            <p className="lp-hero-subtitle">Sponsor the daily-use services your target users rely on. Track performance. Pay only for results.</p>
-            <div className="lp-hero-cta">
-              <button className="primary-btn-large" onClick={() => setCurrentView("signup")}>Get Started</button>
-              <button className="ghost-btn-large" onClick={() => setCurrentView("login")}>Sign In</button>
+            <div className="lp-hero-top">
+              <div className="lp-hero-content">
+                <img src={logoImage} alt="SnapFuel" className="lp-hero-logo" />
+                <h1 className="lp-hero-title">
+                  SnapFuel®<br />
+                  Sponsor the services<br />
+                  your users rely on.
+                </h1>
+                <p className="lp-hero-tagline">
+                  Pay only for results. Track performance. Seamless payments for AI and humans.
+                </p>
+              </div>
+              <div className="lp-hero-cta">
+                <button className="primary-btn-large" onClick={() => setCurrentView("dashboard")}>Get Started</button>
+                <button className="ghost-btn-large" onClick={() => setCurrentView("login")}>Sign In</button>
+              </div>
             </div>
+            <button
+              type="button"
+              className="lp-scroll"
+              onClick={() => document.getElementById("lp-features")?.scrollIntoView({ behavior: "smooth" })}
+            >
+              Scroll Down
+            </button>
           </section>
 
-          <section className="lp-features">
+          <section className="lp-features" id="lp-features">
             <div className="lp-feature-card">
               <div className="lp-feature-icon">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>
@@ -1109,7 +1156,7 @@ function App() {
           <section className="lp-final-cta">
             <h2>Ready to get started?</h2>
             <p>Create your free account and launch your first campaign in minutes.</p>
-            <button className="primary-btn-large" onClick={() => setCurrentView("signup")}>Create Free Account</button>
+            <button className="lp-final-cta-btn" onClick={() => setCurrentView("signup")}>Create Free Account</button>
           </section>
         </main>
       ) : currentView === "signup" ? (
@@ -1130,8 +1177,8 @@ function App() {
             <div className="login-card">
               <div className="login-header">
                 <div className="login-logo" onClick={() => setCurrentView("landing")}>
-                  <img src={logoImage} alt="SubsidyPayment" className="logo-icon-large" />
-                  <h1>SubsidyPayment</h1>
+                  <img src={logoImage} alt="SnapFuel" className="logo-icon-large" />
+                  <h1>SnapFuel</h1>
                 </div>
                 <p className="login-subtitle">Create your account</p>
               </div>
@@ -1237,8 +1284,8 @@ function App() {
             <div className="login-card">
               <div className="login-header">
                 <div className="login-logo" onClick={() => setCurrentView("landing")}>
-                  <img src={logoImage} alt="SubsidyPayment" className="logo-icon-large" />
-                  <h1>SubsidyPayment</h1>
+                  <img src={logoImage} alt="SnapFuel" className="logo-icon-large" />
+                  <h1>SnapFuel</h1>
                 </div>
                 <p className="login-subtitle">Sign in to manage your campaigns</p>
               </div>
