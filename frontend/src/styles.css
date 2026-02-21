@@ -2490,11 +2490,6 @@ td {
   padding-top: 2px;
 }
 
-/* First paint: only show landing (avoids navbar/dashboard flash on load) */
-.dashboard.initial-load .header-nav-tabs {
-  display: none !important;
-}
-
 .header-landing {
   background: transparent;
   border: none;
