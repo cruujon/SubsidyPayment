@@ -14,6 +14,7 @@ const mocked = vi.hoisted(() => ({
   getUserRecord: vi.fn(),
   getPreferences: vi.fn(),
   setPreferences: vi.fn(),
+  getWeather: vi.fn(),
   verifyToken: vi.fn(),
 }));
 
@@ -68,6 +69,19 @@ vi.mock('../../src/auth/token-verifier.ts', async () => {
   };
 });
 
+vi.mock('../../src/x402/weather-client.ts', () => {
+  class X402WeatherClient {
+    getWeather = mocked.getWeather;
+  }
+
+  return { X402WeatherClient };
+});
+
+vi.mock('../../src/widgets/index.ts', () => ({
+  readWidgetHtml: vi.fn().mockResolvedValue('<html></html>'),
+  RESOURCE_MIME_TYPE: 'text/html;profile=mcp-app',
+}));
+
 import { BackendClientError } from '../../src/backend-client.ts';
 import { registerAllTools } from '../../src/tools/index.ts';
 
@@ -80,6 +94,11 @@ const config = {
   port: 3001,
   logLevel: 'info',
   authEnabled: true,
+  x402WeatherUrl: 'http://localhost:4021/weather',
+  x402FacilitatorUrl: 'https://x402.org/facilitator',
+  x402Network: 'eip155:84532',
+  x402PrivateKey: '0x1234',
+  x402RequestTimeoutMs: 15000,
 };
 
 function registerAndCaptureTools() {
@@ -116,17 +135,20 @@ describe('MCP tools unit tests (task 9.1)', () => {
     mocked.getUserRecord.mockReset();
     mocked.getPreferences.mockReset();
     mocked.setPreferences.mockReset();
+    mocked.getWeather.mockReset();
     mocked.verifyToken.mockReset();
   });
 
-  it('registers all 10 tools with expected security schemes', () => {
+  it('registers all 12 tools with expected security schemes', () => {
     registerAndCaptureTools();
 
-    expect(mocked.registrations.size).toBe(10);
+    expect(mocked.registrations.size).toBe(12);
     expect(getRegistered('search_services').definition._meta.securitySchemes).toEqual([{ type: 'noauth' }]);
+    expect(getRegistered('weather').definition._meta.securitySchemes).toEqual([{ type: 'noauth' }]);
 
     const oauthTools = [
       'authenticate_user',
+      'get_service_tasks',
       'get_task_details',
       'start_zkpassport_verification',
       'complete_task',
@@ -158,6 +180,8 @@ describe('MCP tools unit tests (task 9.1)', () => {
     const result = await handler({ q: 'design' }, {});
 
     expect(result.structuredContent).toBeDefined();
+    expect(result.content.find((c: any) => c.type === 'resource')).toBeUndefined();
+    expect(result.contents).toBeUndefined();
     expect(result.content).toBeDefined();
     expect(result._meta).toBeDefined();
     expect(result.isError).toBeUndefined();
@@ -212,6 +236,8 @@ describe('MCP tools unit tests (task 9.1)', () => {
       user_id: 'user-id',
       email: 'user@example.com',
     });
+    expect(result.content.find((c: any) => c.type === 'resource')).toBeUndefined();
+    expect(result.contents).toBeUndefined();
     expect(result._meta.session_token).toBe('session-token');
   });
 
@@ -239,6 +265,8 @@ describe('MCP tools unit tests (task 9.1)', () => {
     );
 
     expect(result.structuredContent.output).toBeUndefined();
+    expect(result.content.find((c: any) => c.type === 'resource')).toBeUndefined();
+    expect(result.contents).toBeUndefined();
     expect(result._meta.output).toBe('very-large-payload');
   });
 
@@ -251,5 +279,33 @@ describe('MCP tools unit tests (task 9.1)', () => {
         preferences: [{ task_type: 'survey', level: 'invalid-level' }],
       })
     ).toThrow();
+  });
+
+  it('returns 3-part response for weather success', async () => {
+    registerAndCaptureTools();
+    mocked.getWeather.mockResolvedValue({
+      city: 'San Francisco',
+      weather: 'sunny',
+      temperature: 70,
+    });
+
+    const { handler } = getRegistered('weather');
+    const result = await handler({ city: 'San Francisco' }, {});
+
+    expect(result.structuredContent.city).toBe('San Francisco');
+    expect(result.content).toBeDefined();
+    expect(result._meta.report).toBeDefined();
+    expect(result.isError).toBeUndefined();
+  });
+
+  it('returns backend error for weather failure', async () => {
+    registerAndCaptureTools();
+    mocked.getWeather.mockRejectedValue(new BackendClientError('weather_request_failed', 'weather failed'));
+
+    const { handler } = getRegistered('weather');
+    const result = await handler({ city: 'Tokyo' }, {});
+
+    expect(result.isError).toBe(true);
+    expect(result._meta.code).toBe('weather_request_failed');
   });
 });

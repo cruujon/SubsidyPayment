@@ -58,6 +58,11 @@ vi.mock('../../src/auth/token-verifier.ts', async () => {
   };
 });
 
+vi.mock('../../src/widgets/index.ts', () => ({
+  readWidgetHtml: vi.fn().mockResolvedValue('<html></html>'),
+  RESOURCE_MIME_TYPE: 'text/html;profile=mcp-app',
+}));
+
 import { registerAllTools } from '../../src/tools/index.ts';
 
 const config = {
@@ -69,6 +74,11 @@ const config = {
   port: 3001,
   logLevel: 'info',
   authEnabled: true,
+  x402WeatherUrl: 'http://localhost:4021/weather',
+  x402FacilitatorUrl: 'https://x402.org/facilitator',
+  x402Network: 'eip155:84532',
+  x402PrivateKey: '0x1234',
+  x402RequestTimeoutMs: 15000,
 };
 
 function registerTools() {
