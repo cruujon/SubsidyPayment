@@ -21,11 +21,13 @@
 
 | 項目 | 技術 | バージョン |
 |---|---|---|
-| **フレームワーク** | React | 18.3 |
-| **ビルドツール** | Vite | 5.4 |
-| **言語** | TypeScript | 5.6 |
-| **画像処理** | Sharp (OG image 生成) | 0.34 |
+| **フレームワーク** | React | 18.3.1 |
+| **ビルドツール** | Vite | 5.4.11 |
+| **言語** | TypeScript | 5.6.3 |
+| **3D** | three / @react-three/fiber | 0.176.0 / 8.17.14 |
+| **画像処理** | Sharp (OG image 生成) | 0.34.5 |
 | **デプロイ** | Vercel | — |
+| **Node.js** | Node | 20.x |
 
 ## インフラ / デプロイ
 
@@ -35,7 +37,7 @@
 | **フロントエンドデプロイ** | Vercel |
 | **データベース** | PostgreSQL (ローカル: docker-compose.postgres.yml) |
 | **マイグレーション** | SQLx マイグレーション (migrations/) |
-| **ドキュメント** | GitBook (docs/) |
+| **ドキュメント** | Honkit (docs/) |
 
 ## 外部プロトコル / API
 
@@ -53,6 +55,7 @@
 | `DATABASE_URL` | PostgreSQL 接続文字列 |
 | `X402_FACILITATOR_URL` | x402 Facilitator エンドポイント |
 | `X402_VERIFY_PATH` / `X402_SETTLE_PATH` | Facilitator のパス |
+| `X402_FACILITATOR_BEARER_TOKEN` | Facilitator Bearer トークン |
 | `X402_NETWORK` | ブロックチェーンネットワーク |
 | `X402_PAY_TO` | 受取ウォレットアドレス |
 | `X402_ASSET` | 決済アセットアドレス (USDC) |
@@ -61,20 +64,34 @@
 | `RUST_LOG` | ログレベル設定 |
 | `SPONSORED_API_CREATE_PRICE_CENTS` | Sponsored API 作成価格 |
 | `SPONSORED_API_TIMEOUT_SECS` | Sponsored API タイムアウト |
+| `GPT_ACTIONS_API_KEY` | GPT Actions 用 API キー |
+| `AGENT_DISCOVERY_API_KEY` | Agent Discovery 用 API キー |
+| `AGENT_DISCOVERY_RATE_LIMIT_PER_MIN` | Agent Discovery のレート制限 |
+| `CORS_ALLOW_ORIGINS` | CORS 許可オリジン (カンマ区切り) |
+| `MCP_SERVER_URL` | MCP サーバー URL (CORS 用) |
+| `ZKPASSPORT_VERIFIER_URL` | zkPassport 検証 API |
+| `ZKPASSPORT_VERIFIER_API_KEY` | zkPassport 検証 API キー |
+| `ZKPASSPORT_VERIFY_PAGE_URL` | zkPassport 検証ページ URL |
+| `ZKPASSPORT_SCOPE` | zkPassport スコープ |
+| `ZKPASSPORT_VERIFICATION_TTL_SECS` | 検証トークン TTL |
+| `ZKPASSPORT_HASH_SALT` | zkPassport ハッシュソルト |
 
 ## MCP サーバー
 
 | 項目 | 技術 | バージョン |
 |---|---|---|
 | **ランタイム** | Node.js | 22+ |
-| **言語** | TypeScript | 5.x |
-| **フレームワーク** | Express | 4.x |
-| **MCP SDK** | @modelcontextprotocol/sdk | — |
-| **認証** | Auth0 JWT (jwks-rsa) | — |
-| **ログ** | pino | — |
-| **バリデーション** | Zod | — |
+| **言語** | TypeScript | 5.6.0 |
+| **フレームワーク** | Express | 4.21.0 |
+| **MCP SDK** | @modelcontextprotocol/sdk | 1.26.0 |
+| **拡張** | @modelcontextprotocol/ext-apps | 1.0.1 |
+| **HTTP クライアント** | Axios | 1.13.5 |
+| **EVM** | viem | 2.46.2 |
+| **認証** | jsonwebtoken / jwks-rsa | 9.0.2 / 3.2.0 |
+| **ログ** | pino | 9.0.0 |
+| **バリデーション** | Zod | 3.25.0 |
 | **ビルド** | esbuild + Vite (ウィジェット) | — |
-| **テスト** | Vitest | 3.x |
+| **テスト** | Vitest | 3.0.0 |
 
 ### MCP サーバー環境変数
 
@@ -88,6 +105,16 @@
 | `PORT` | MCP サーバーポート | `3001` |
 | `LOG_LEVEL` | ログレベル | `info` |
 | `AUTH_ENABLED` | OAuth 認証トグル (`true`/`false`)。未設定時は AUTH0_DOMAIN と AUTH0_AUDIENCE が両方あれば有効、なければ無効 | 自動判定 |
+
+## x402 サンプルサーバー (x402server)
+
+| 項目 | 技術 | バージョン |
+|---|---|---|
+| **フレームワーク** | Hono | 4.7.1 |
+| **x402** | @x402/core / @x402/hono / @x402/evm | latest / latest / latest |
+| **HTTP クライアント** | Axios | 1.13.5 |
+| **EVM** | viem | 2.46.2 |
+| **実行** | tsx / pnpm | 4.7.0 / — |
 
 ## 開発コマンド
 
@@ -104,6 +131,12 @@ cd mcp-server && npm run dev
 # MCP サーバー起動（認証OFF / MVPモード）
 cd mcp-server && AUTH_ENABLED=false npm run dev
 
+# x402 サンプルサーバー起動
+cd x402server && pnpm run dev
+
+# x402 デモクライアント
+cd x402server && pnpm run demo
+
 # PostgreSQL 起動 (Docker)
 docker compose -f docker-compose.postgres.yml up -d
 
@@ -114,7 +147,7 @@ cargo test
 cd mcp-server && npm test
 
 # ドキュメント
-cd docs && npx gitbook serve
+cd docs && npm run serve
 ```
 
 ## コーディング規約
