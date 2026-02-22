@@ -224,6 +224,43 @@
         color: #86efac;
         font-size: 14px;
       }
+
+      @media (max-width: 520px) {
+        #app {
+          padding: 10px;
+        }
+
+        .panel {
+          padding: 10px;
+          border-radius: 10px;
+        }
+
+        h2 {
+          font-size: 15px;
+        }
+
+        .task-options {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+
+        .task-option {
+          width: 100%;
+          text-align: left;
+          font-size: 13px;
+        }
+
+        button[type='submit'],
+        .alt-actions button {
+          width: 100%;
+          min-height: 44px;
+        }
+
+        .checks {
+          font-size: 12px;
+          gap: 10px;
+        }
+      }
     </style>
   </head>
   <body>
@@ -263,6 +300,12 @@
       const task_input_format = data.task_input_format ?? {};
       const alreadyCompleted = Boolean(data.already_completed);
       const selectedServiceKey = typeof widgetState?.selectedServiceKey === 'string' ? widgetState.selectedServiceKey : '';
+      const taskType = typeof task_input_format?.task_type === 'string' && task_input_format.task_type.length > 0 ? task_input_format.task_type : 'survey';
+      const taskConstraints =
+        task_input_format && typeof task_input_format === 'object' && task_input_format.constraints
+          ? task_input_format.constraints
+          : {};
+      const isZkpassportTask = taskType === 'zkpassport_age_country';
       const selectedServiceName = typeof widgetState?.selectedServiceName === 'string' ? widgetState.selectedServiceName : selectedServiceKey || 'service';
 
       function escapeHtml(value) {
@@ -315,8 +358,56 @@
         const err = root?.querySelector('.error');
 
         if (!allConsentsChecked(form)) {
-          if (err) err.textContent = 'All three consent checkboxes are required.';
+          if (err) {
+            err.textContent = 'All three consent checkboxes are required.';
+            err.style.color = 'var(--danger)';
+          }
           return;
+        }
+
+        const consent = {
+          data_sharing_agreed: true,
+          purpose_acknowledged: true,
+          contact_permission: true,
+        };
+
+        if (isZkpassportTask) {
+          if (err) {
+            err.textContent = 'Creating verification session...';
+            err.style.color = 'var(--muted)';
+          }
+
+          try {
+            const response = await callTool('start_zkpassport_verification', {
+              campaign_id: campaignId,
+              consent,
+            });
+            const verificationUrl =
+              response?.structuredContent?.verification_url ??
+              response?._meta?.full_response?.verification_url ??
+              null;
+
+            if (typeof verificationUrl !== 'string' || verificationUrl.length === 0) {
+              if (err) {
+                err.textContent = 'Verification URL not returned. Please try again.';
+                err.style.color = 'var(--danger)';
+              }
+              return;
+            }
+
+            window.open(verificationUrl, '_blank', 'noopener,noreferrer');
+            if (err) {
+              err.textContent = 'Verification opened in a new tab. Complete it and return to GPT.';
+              err.style.color = 'var(--muted)';
+            }
+            return;
+          } catch (error) {
+            if (err) {
+              err.textContent = error?.message || 'Failed to start verification.';
+              err.style.color = 'var(--danger)';
+            }
+            return;
+          }
         }
 
         const detailsPayload = collectFields(form);
@@ -326,15 +417,25 @@
           campaign_id: campaignId,
           task_name: requiredTask,
           details: JSON.stringify(detailsPayload),
-          consent: {
-            data_sharing_agreed: true,
-            purpose_acknowledged: true,
-            contact_permission: true,
-          },
+          consent,
         });
       }
 
       function buildFields() {
+        if (isZkpassportTask) {
+          const minAge = Number(taskConstraints?.min_age ?? 18);
+          const allowedCountries = Array.isArray(taskConstraints?.allowed_country_labels)
+            ? taskConstraints.allowed_country_labels.join(', ')
+            : 'EU countries, USA, Japan';
+
+          return `
+            <div class="verify-note" style="margin-bottom: 10px;">
+              Human proof required: age must be <strong>${escapeHtml(String(minAge))}+</strong> and nationality must be in
+              <strong>${escapeHtml(allowedCountries)}</strong>.
+            </div>
+          `;
+        }
+
         const requiredFields = Array.isArray(task_input_format?.required_fields)
           ? task_input_format.required_fields
           : ['email', 'username', 'password'];
@@ -393,11 +494,11 @@
             <span class="status">In Progress</span>
           </section>
           <section class="urlbar">
-            <div class="url-inner">🔒 ${escapeHtml(selectedServiceName)} / signup</div>
+            <div class="url-inner">🔒 ${escapeHtml(selectedServiceName)} / ${isZkpassportTask ? 'verification' : 'signup'}</div>
           </section>
           <section class="content">
             <span class="brand">${escapeHtml(brandInitials || 'SV')}</span>
-            <h3 class="title">Create your ${escapeHtml(selectedServiceName)} account</h3>
+            <h3 class="title">${isZkpassportTask ? 'Complete age &amp; country verification' : `Create your ${escapeHtml(selectedServiceName)} account`}</h3>
             <form id="task-form">
               ${buildFields()}
               <div class="checks">
@@ -405,13 +506,13 @@
                 <label><input type="checkbox" name="purpose_acknowledged" /> I understand the usage purpose.</label>
                 <label><input type="checkbox" name="contact_permission" /> I allow follow-up contact.</label>
               </div>
-              <button type="button" class="create-btn">Create Account ›</button>
+              ${isZkpassportTask ? '' : '<button type="button" class="create-btn">Create Account ›</button>'}
             </form>
           </section>
           <div class="divider"></div>
           <section class="verify">
             <div class="verify-note">ℹ️ ${escapeHtml(taskDescription)}</div>
-            <button class="verify-btn" id="verify-btn">Submit for Verification</button>
+            <button class="verify-btn" id="verify-btn">${isZkpassportTask ? 'Verify age & country' : 'Submit for Verification'}</button>
             <button class="alt" id="direct-payment">Use direct payment instead</button>
             <p class="error"></p>
           </section>

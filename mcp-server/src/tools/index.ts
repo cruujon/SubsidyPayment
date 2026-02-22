@@ -9,6 +9,7 @@ import { registerGetTaskDetailsTool } from './get-task-details.ts';
 import { registerGetUserStatusTool } from './get-user-status.ts';
 import { registerRunServiceTool } from './run-service.ts';
 import { registerSearchServicesTool } from './search-services.ts';
+import { registerStartZkpassportVerificationTool } from './start-zkpassport-verification.ts';
 import { registerSetPreferencesTool } from './set-preferences.ts';
 import { registerUserRecordTool } from './user-record.ts';
 import { registerWeatherTool } from './weather.ts';
@@ -18,6 +19,7 @@ export function registerAllTools(server: McpServer, config: BackendConfig): void
   registerAuthenticateUserTool(server, config);
   registerGetServiceTasksTool(server, config);
   registerGetTaskDetailsTool(server, config);
+  registerStartZkpassportVerificationTool(server, config);
   registerCompleteTaskTool(server, config);
   registerRunServiceTool(server, config);
   registerGetUserStatusTool(server, config);
