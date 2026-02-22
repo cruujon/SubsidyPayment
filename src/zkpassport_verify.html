@@ -72,6 +72,7 @@
         font-size: 14px;
         cursor: pointer;
         text-decoration: none;
+        min-height: 44px;
       }
 
       button[disabled] {
@@ -84,8 +85,9 @@
       }
 
       #qr {
-        width: 220px;
-        height: 220px;
+        width: min(220px, 100%);
+        height: auto;
+        aspect-ratio: 1 / 1;
         border-radius: 10px;
         border: 1px solid var(--border);
         background: #fff;
@@ -120,6 +122,47 @@
 
       #open-request-link {
         display: none;
+      }
+
+      @media (max-width: 640px) {
+        body {
+          padding: 12px 10px;
+        }
+
+        .panel {
+          border-radius: 12px;
+          padding: 14px;
+        }
+
+        h1 {
+          font-size: 20px;
+          line-height: 1.25;
+        }
+
+        .controls {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+
+        button,
+        a.button {
+          width: 100%;
+          justify-content: center;
+          text-align: center;
+          font-size: 15px;
+        }
+
+        .meta {
+          font-size: 12px;
+        }
+
+        .mono {
+          word-break: break-all;
+        }
+
+        .status {
+          font-size: 13px;
+        }
       }
     </style>
   </head>

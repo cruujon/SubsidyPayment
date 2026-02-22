@@ -142,6 +142,43 @@
         padding: 8px 10px;
         cursor: pointer;
       }
+
+      @media (max-width: 520px) {
+        #app {
+          padding: 10px;
+        }
+
+        .panel {
+          padding: 10px;
+          border-radius: 10px;
+        }
+
+        h2 {
+          font-size: 15px;
+        }
+
+        .task-options {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+
+        .task-option {
+          width: 100%;
+          text-align: left;
+          font-size: 13px;
+        }
+
+        button[type='submit'],
+        .alt-actions button {
+          width: 100%;
+          min-height: 44px;
+        }
+
+        .checks {
+          font-size: 12px;
+          gap: 10px;
+        }
+      }
     </style>
   </head>
   <body>
