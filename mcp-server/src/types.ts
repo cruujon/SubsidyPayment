@@ -1,3 +1,4 @@
+// サービス検索のレスポンス
 export interface GptSearchResponse {
   services: GptServiceItem[];
   total_count: number;
@@ -9,6 +10,7 @@ export interface GptSearchResponse {
   available_categories?: string[];
 }
 
+// 目的に合う候補サービスの集約情報
 export interface GptCandidateService {
   service_key: string;
   display_name: string;
@@ -17,6 +19,7 @@ export interface GptCandidateService {
   offers: GptCandidateServiceOffer[];
 }
 
+// 候補サービスに紐づくキャンペーンオファー
 export interface GptCandidateServiceOffer {
   campaign_id: string;
   campaign_name: string;
@@ -25,6 +28,7 @@ export interface GptCandidateServiceOffer {
   subsidy_amount_cents: number;
 }
 
+// サービス別の集計情報
 export interface ServiceCatalogItem {
   service_key: string;
   display_name: string;
@@ -35,12 +39,50 @@ export interface ServiceCatalogItem {
   max_subsidy_cents: number;
 }
 
+// スポンサー別の集計情報
 export interface SponsorCatalogItem {
   sponsor_name: string;
   sponsor_archetype: string;
   service_keys: string[];
   required_tasks: string[];
   offer_count: number;
+}
+
+// キャンペーン本体情報
+export interface Campaign {
+  id: string;
+  name: string;
+  sponsor: string;
+  sponsor_wallet_address?: string | null;
+  target_roles: string[];
+  target_tools: string[];
+  required_task: string;
+  subsidy_per_call_cents: number;
+  budget_total_cents: number;
+  budget_remaining_cents: number;
+  query_urls: string[];
+  active: boolean;
+  created_at: string;
+}
+
+// キャンペーン作成リクエスト
+export interface CreateCampaignRequest {
+  name: string;
+  sponsor: string;
+  sponsor_wallet_address?: string | null;
+  target_roles: string[];
+  target_tools: string[];
+  required_task: string;
+  subsidy_per_call_cents: number;
+  budget_cents: number;
+  query_urls: string[];
+}
+
+// キャンペーン作成レスポンス
+export interface CreateCampaignResponse {
+  campaign: Campaign;
+  campaign_url: string;
+  dashboard_url: string;
 }
 
 export interface GptServiceItem {

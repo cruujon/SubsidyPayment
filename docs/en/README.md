@@ -181,6 +181,240 @@ The **Model Context Protocol** is a standardized interface for connecting AI too
 - Built-in error handling and retry logic
 - Developer-friendly API wrappers
 
+### MCP Tool Spec (MVP)
+
+This tool auto-creates campaigns by taking a purpose and target audience and selecting relevant services and tasks.
+
+**Tool Name**
+- `create_campaign_from_goal`
+
+**Goal**
+- Generate campaign fields from a purpose/target input and call `POST /campaigns`
+
+**Tool Definition (MCP)**
+```json
+{
+  "name": "create_campaign_from_goal",
+  "description": "Create a sponsor campaign from a purpose and target audience.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "purpose": { "type": "string" },
+      "sponsor": { "type": "string" },
+      "target_roles": { "type": "array", "items": { "type": "string" } },
+      "target_tools": { "type": "array", "items": { "type": "string" } },
+      "budget_cents": { "type": "number" },
+      "query_urls": { "type": "array", "items": { "type": "string" } },
+      "region": { "type": "string" },
+      "intent": { "type": "string" },
+      "max_budget_cents": { "type": "number" }
+    },
+    "required": ["purpose", "sponsor", "target_roles", "budget_cents"]
+  }
+}
+```
+
+**Input (JSON Schema Overview)**
+- `purpose`: Purpose summary (required)
+- `sponsor`: Sponsor name (required)
+- `target_roles`: Target roles array (required)
+- `target_tools`: Target tools array (optional)
+- `budget_cents`: Budget in cents (required)
+- `query_urls`: Upstream URLs array (optional)
+- `region`: Target region (optional)
+- `intent`: Detailed intent (optional)
+- `max_budget_cents`: Per-call budget cap (optional)
+
+**MVP Flow**
+1. Search candidate services via `GET /gpt/services`
+2. Pick `required_task` and `target_tools` from top candidates
+3. Create campaign via `POST /campaigns`
+
+**Output**
+- `campaign_id`: Created campaign ID
+- `campaign`: Created campaign payload
+- `selected_service_key`: Selected service key
+- `selected_offer`: Selected offer (campaign_id / sponsor / required_task / subsidy_amount_cents)
+- `selected_services`: Candidate services used for selection
+- `selected_task`: Chosen task details (required_task / subsidy_per_call_cents)
+- `rationale`: Summary of selection reasoning
+
+**Example Input**
+```json
+{
+  "purpose": "Improve AI chat assistance",
+  "sponsor": "Acme Corp",
+  "target_roles": ["customer-support", "product-manager"],
+  "budget_cents": 25000,
+  "intent": "Improve FAQ response quality",
+  "max_budget_cents": 150
+}
+```
+
+**Example Output (structuredContent)**
+```json
+{
+  "campaign_id": "2f6d2c0b-3c7a-4a0a-9a2e-6f2b6b7e8d90",
+  "campaign": {
+    "id": "2f6d2c0b-3c7a-4a0a-9a2e-6f2b6b7e8d90",
+    "name": "Acme Corp Improve AI chat assistance",
+    "sponsor": "Acme Corp",
+    "sponsor_wallet_address": null,
+    "target_roles": ["customer-support", "product-manager"],
+    "target_tools": ["faq_search"],
+    "required_task": "share_feedback",
+    "subsidy_per_call_cents": 120,
+    "budget_total_cents": 25000,
+    "budget_remaining_cents": 25000,
+    "query_urls": [],
+    "active": true,
+    "created_at": "2026-02-23T09:00:00Z"
+  },
+  "selected_service_key": "faq_search",
+  "selected_offer": {
+    "campaign_id": "5d6a4b27-2f6c-4c5f-9d9e-0bb0f8870d29",
+    "campaign_name": "FAQ Search Sponsors",
+    "sponsor": "Acme Corp",
+    "required_task": "share_feedback",
+    "subsidy_amount_cents": 120
+  },
+  "selected_services": [],
+  "selected_task": {
+    "required_task": "share_feedback",
+    "subsidy_per_call_cents": 120
+  },
+  "rationale": "Selected the highest-subsidy offer from candidate services."
+}
+```
+
+**Failure Handling**
+- If the purpose is too vague, return a validation error with missing details
+- If the budget is insufficient, return a validation error explaining the shortfall
+- If target tools cannot be determined, return a validation error
+
+**Error Response Examples (MCP)**
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "No suitable sponsored services found. Try a more specific purpose or adjust the budget."
+    }
+  ],
+  "_meta": {
+    "code": "no_candidate_service",
+    "details": {
+      "services": [],
+      "total_count": 0,
+      "message": "No services matched"
+    }
+  },
+  "isError": true
+}
+```
+
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "Budget is below the selected subsidy amount. Increase budget or adjust purpose."
+    }
+  ],
+  "_meta": {
+    "code": "budget_too_low",
+    "details": {
+      "budget_cents": 80,
+      "subsidy_per_call_cents": 120
+    }
+  },
+  "isError": true
+}
+```
+
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "Target tools could not be determined. Provide target_tools explicitly."
+    }
+  ],
+  "_meta": {
+    "code": "missing_target_tools",
+    "details": {
+      "service_key": "",
+      "offer": {
+        "campaign_id": "5d6a4b27-2f6c-4c5f-9d9e-0bb0f8870d29",
+        "campaign_name": "FAQ Search Sponsors",
+        "sponsor": "Acme Corp",
+        "required_task": "share_feedback",
+        "subsidy_amount_cents": 120
+      },
+      "source": "service"
+    }
+  },
+  "isError": true
+}
+```
+
+**structuredContent Detailed Example**
+```json
+{
+  "campaign_id": "2f6d2c0b-3c7a-4a0a-9a2e-6f2b6b7e8d90",
+  "campaign": {
+    "id": "2f6d2c0b-3c7a-4a0a-9a2e-6f2b6b7e8d90",
+    "name": "Acme Corp Improve AI chat assistance",
+    "sponsor": "Acme Corp",
+    "sponsor_wallet_address": null,
+    "target_roles": ["customer-support", "product-manager"],
+    "target_tools": ["faq_search"],
+    "required_task": "share_feedback",
+    "subsidy_per_call_cents": 120,
+    "budget_total_cents": 25000,
+    "budget_remaining_cents": 25000,
+    "query_urls": ["https://example.com/faq"],
+    "active": true,
+    "created_at": "2026-02-23T09:00:00Z"
+  },
+  "selected_service_key": "faq_search",
+  "selected_offer": {
+    "campaign_id": "5d6a4b27-2f6c-4c5f-9d9e-0bb0f8870d29",
+    "campaign_name": "FAQ Search Sponsors",
+    "sponsor": "Acme Corp",
+    "required_task": "share_feedback",
+    "subsidy_amount_cents": 120
+  },
+  "selected_services": [
+    {
+      "service_key": "faq_search",
+      "display_name": "FAQ Search",
+      "reason": "Matches the purpose",
+      "offer_count": 2,
+      "offers": [
+        {
+          "campaign_id": "5d6a4b27-2f6c-4c5f-9d9e-0bb0f8870d29",
+          "campaign_name": "FAQ Search Sponsors",
+          "sponsor": "Acme Corp",
+          "required_task": "share_feedback",
+          "subsidy_amount_cents": 120
+        }
+      ]
+    }
+  ],
+  "selected_task": {
+    "required_task": "share_feedback",
+    "subsidy_per_call_cents": 120
+  },
+  "rationale": "Selected the highest-subsidy offer from candidate services."
+}
+```
+
+**Prompt Examples to Invoke the Tool**
+- "Create a campaign to improve FAQ answer quality for customer support. Sponsor is Acme Corp, budget is $250."
+- "Create a campaign for B2B onboarding improvements. Target roles are product managers, budget is $300."
+- "Auto-select the tasks and tools for an AI chat improvement campaign and create it."
+
 ### Verification System
 
 **Proof of Action**

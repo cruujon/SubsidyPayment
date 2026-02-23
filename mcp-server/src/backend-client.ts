@@ -3,6 +3,8 @@ import type {
   AuthenticateUserParams,
   BackendErrorResponse,
   CompleteTaskInput,
+  CreateCampaignRequest,
+  CreateCampaignResponse,
   GetPreferencesParams,
   GetUserRecordParams,
   GptInitZkpassportVerificationResponse,
@@ -38,6 +40,11 @@ export class BackendClientError extends Error {
   }
 }
 
+/**
+ * Rust バックエンドとの通信用クライアント
+ *
+ * @param config バックエンド設定
+ */
 export class BackendClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
@@ -147,6 +154,19 @@ export class BackendClient {
 
   async setPreferences(payload: SetPreferencesInput): Promise<GptSetPreferencesResponse> {
     return this.request<GptSetPreferencesResponse>('/gpt/preferences', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /**
+   * キャンペーン作成 API を呼び出す
+   *
+   * @param payload 作成リクエスト
+   * @returns 作成されたキャンペーン情報
+   */
+  async createCampaign(payload: CreateCampaignRequest): Promise<CreateCampaignResponse> {
+    return this.request<CreateCampaignResponse>('/campaigns', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
