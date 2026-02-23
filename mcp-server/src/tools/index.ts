@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { BackendConfig } from '../config.ts';
 import { registerAuthenticateUserTool } from './authenticate-user.ts';
 import { registerCompleteTaskTool } from './complete-task.ts';
+import { registerCreateCampaignFromGoalTool } from './create-campaign-from-goal.ts';
 import { registerGetPreferencesTool } from './get-preferences.ts';
 import { registerGetServiceTasksTool } from './get-service-tasks.ts';
 import { registerGetTaskDetailsTool } from './get-task-details.ts';
@@ -14,9 +15,16 @@ import { registerSetPreferencesTool } from './set-preferences.ts';
 import { registerUserRecordTool } from './user-record.ts';
 import { registerWeatherTool } from './weather.ts';
 
+/**
+ * MCP ツール群をまとめて登録する
+ *
+ * @param server MCP サーバー
+ * @param config バックエンド設定
+ */
 export function registerAllTools(server: McpServer, config: BackendConfig): void {
   registerSearchServicesTool(server, config);
   registerAuthenticateUserTool(server, config);
+  registerCreateCampaignFromGoalTool(server, config);
   registerGetServiceTasksTool(server, config);
   registerGetTaskDetailsTool(server, config);
   registerStartZkpassportVerificationTool(server, config);
