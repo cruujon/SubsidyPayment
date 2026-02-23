@@ -181,6 +181,43 @@ The **Model Context Protocol** is a standardized interface for connecting AI too
 - Built-in error handling and retry logic
 - Developer-friendly API wrappers
 
+### MCP Tool Spec (MVP)
+
+This tool auto-creates campaigns by taking a purpose and target audience and selecting relevant services and tasks.
+
+**Tool Name**
+- `create_campaign_from_goal`
+
+**Goal**
+- Generate campaign fields from a purpose/target input and call `POST /campaigns`
+
+**Input (JSON Schema Overview)**
+- `purpose`: Purpose summary (required)
+- `sponsor`: Sponsor name (required)
+- `target_roles`: Target roles array (required)
+- `target_tools`: Target tools array (required)
+- `budget_cents`: Budget in cents (required)
+- `query_urls`: Upstream URLs array (optional)
+- `region`: Target region (optional)
+- `intent`: Detailed intent (optional)
+- `max_budget_cents`: Per-call budget cap (optional)
+
+**MVP Flow**
+1. Search candidate services via `GET /gpt/services`
+2. Pick `required_task` and `target_tools` from top candidates
+3. Create campaign via `POST /campaigns`
+
+**Output**
+- `campaign_id`: Created campaign ID
+- `campaign`: Created campaign payload
+- `selected_services`: Candidate services used for selection
+- `selected_task`: Chosen task details
+- `rationale`: Summary of selection reasoning
+
+**Failure Handling**
+- If the purpose is too vague, return a validation error with missing details
+- If the budget is insufficient, return a validation error explaining the shortfall
+
 ### Verification System
 
 **Proof of Action**
