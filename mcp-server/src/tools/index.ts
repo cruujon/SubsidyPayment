@@ -8,10 +8,11 @@ import { registerGetPreferencesTool } from './get-preferences.ts';
 import { registerGetServiceTasksTool } from './get-service-tasks.ts';
 import { registerGetTaskDetailsTool } from './get-task-details.ts';
 import { registerGetUserStatusTool } from './get-user-status.ts';
+import { registerCreateGithubIssueTool } from './github-issue.ts';
 import { registerRunServiceTool } from './run-service.ts';
 import { registerSearchServicesTool } from './search-services.ts';
-import { registerStartZkpassportVerificationTool } from './start-zkpassport-verification.ts';
 import { registerSetPreferencesTool } from './set-preferences.ts';
+import { registerStartZkpassportVerificationTool } from './start-zkpassport-verification.ts';
 import { registerUserRecordTool } from './user-record.ts';
 import { registerWeatherTool } from './weather.ts';
 
@@ -35,4 +36,5 @@ export function registerAllTools(server: McpServer, config: BackendConfig): void
   registerGetPreferencesTool(server, config);
   registerSetPreferencesTool(server, config);
   registerWeatherTool(server, config);
+  registerCreateGithubIssueTool(server, config);
 }

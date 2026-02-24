@@ -75,6 +75,7 @@ const config = {
   logLevel: 'info',
   authEnabled: true,
   x402WeatherUrl: 'http://localhost:4021/weather',
+  x402GithubIssueUrl: 'http://localhost:4021/github-issue',
   x402FacilitatorUrl: 'https://x402.org/facilitator',
   x402Network: 'eip155:84532',
   x402PrivateKey: '0x1234',

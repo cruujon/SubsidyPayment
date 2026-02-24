@@ -15,6 +15,7 @@ const mocked = vi.hoisted(() => ({
   getPreferences: vi.fn(),
   setPreferences: vi.fn(),
   getWeather: vi.fn(),
+  createGithubIssue: vi.fn(),
   verifyToken: vi.fn(),
 }));
 
@@ -77,6 +78,14 @@ vi.mock('../../src/x402/weather-client.ts', () => {
   return { X402WeatherClient };
 });
 
+vi.mock('../../src/x402/github-issue-client.ts', () => {
+  class X402GithubIssueClient {
+    createGithubIssue = mocked.createGithubIssue;
+  }
+
+  return { X402GithubIssueClient };
+});
+
 vi.mock('../../src/widgets/index.ts', () => ({
   readWidgetHtml: vi.fn().mockResolvedValue('<html></html>'),
   RESOURCE_MIME_TYPE: 'text/html;profile=mcp-app',
@@ -95,6 +104,7 @@ const config = {
   logLevel: 'info',
   authEnabled: true,
   x402WeatherUrl: 'http://localhost:4021/weather',
+  x402GithubIssueUrl: 'http://localhost:4021/github-issue',
   x402FacilitatorUrl: 'https://x402.org/facilitator',
   x402Network: 'eip155:84532',
   x402PrivateKey: '0x1234',
@@ -136,15 +146,17 @@ describe('MCP tools unit tests (task 9.1)', () => {
     mocked.getPreferences.mockReset();
     mocked.setPreferences.mockReset();
     mocked.getWeather.mockReset();
+    mocked.createGithubIssue.mockReset();
     mocked.verifyToken.mockReset();
   });
 
-  it('registers all 13 tools with expected security schemes', () => {
+  it('registers all 14 tools with expected security schemes', () => {
     registerAndCaptureTools();
 
-    expect(mocked.registrations.size).toBe(13);
+    expect(mocked.registrations.size).toBe(14);
     expect(getRegistered('search_services').definition._meta.securitySchemes).toEqual([{ type: 'noauth' }]);
     expect(getRegistered('weather').definition._meta.securitySchemes).toEqual([{ type: 'noauth' }]);
+    expect(getRegistered('create_github_issue').definition._meta.securitySchemes).toEqual([{ type: 'noauth' }]);
 
     const oauthTools = [
       'authenticate_user',
@@ -307,5 +319,31 @@ describe('MCP tools unit tests (task 9.1)', () => {
 
     expect(result.isError).toBe(true);
     expect(result._meta.code).toBe('weather_request_failed');
+  });
+
+  it('returns 3-part response for create_github_issue success', async () => {
+    registerAndCaptureTools();
+    mocked.createGithubIssue.mockResolvedValue({
+      status: 'issue created',
+    });
+
+    const { handler } = getRegistered('create_github_issue');
+    const result = await handler({}, {});
+
+    expect(result.structuredContent.status).toBe('issue created');
+    expect(result.content).toBeDefined();
+    expect(result._meta.response).toBeDefined();
+    expect(result.isError).toBeUndefined();
+  });
+
+  it('returns backend error for create_github_issue failure', async () => {
+    registerAndCaptureTools();
+    mocked.createGithubIssue.mockRejectedValue(new BackendClientError('github_issue_request_failed', 'issue failed'));
+
+    const { handler } = getRegistered('create_github_issue');
+    const result = await handler({}, {});
+
+    expect(result.isError).toBe(true);
+    expect(result._meta.code).toBe('github_issue_request_failed');
   });
 });

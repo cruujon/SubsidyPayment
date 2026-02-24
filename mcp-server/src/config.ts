@@ -9,6 +9,7 @@ export interface BackendConfig {
   logLevel: string;
   authEnabled: boolean;
   x402WeatherUrl: string;
+  x402GithubIssueUrl: string;
   x402FacilitatorUrl: string;
   x402Network: `${string}:${string}`;
   x402PrivateKey: string;
@@ -52,6 +53,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     logLevel: env.LOG_LEVEL || 'info',
     authEnabled: resolveAuthEnabled(env),
     x402WeatherUrl: env.X402_WEATHER_URL || 'http://localhost:4021/weather',
+    x402GithubIssueUrl: env.X402_GITHUB_ISSUE_URL || 'http://localhost:4021/github-issue',
     x402FacilitatorUrl: env.X402_FACILITATOR_URL || 'https://x402.org/facilitator',
     x402Network: (env.X402_NETWORK || 'eip155:84532') as `${string}:${string}`,
     x402PrivateKey: env.X402_PRIVATE_KEY || '',
