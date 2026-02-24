@@ -4,6 +4,7 @@ import type { BackendConfig } from '../config.ts';
 import { registerAuthenticateUserTool } from './authenticate-user.ts';
 import { registerCompleteTaskTool } from './complete-task.ts';
 import { registerCreateCampaignFromGoalTool } from './create-campaign-from-goal.ts';
+import { registerCreateGithubIssueTool } from './github-issue.ts';
 import { registerGetPreferencesTool } from './get-preferences.ts';
 import { registerGetServiceTasksTool } from './get-service-tasks.ts';
 import { registerGetTaskDetailsTool } from './get-task-details.ts';
@@ -35,4 +36,5 @@ export function registerAllTools(server: McpServer, config: BackendConfig): void
   registerGetPreferencesTool(server, config);
   registerSetPreferencesTool(server, config);
   registerWeatherTool(server, config);
+  registerCreateGithubIssueTool(server, config);
 }
