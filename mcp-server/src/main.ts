@@ -92,6 +92,51 @@ export function createApp() {
   app.get('/.well-known/oauth-protected-resource', oauthProtectedResourceHandler(config));
   app.get('/.well-known/oauth-authorization-server', oauthAuthorizationServerRedirectHandler(config));
 
+  app.get('/internal/qr', async (req, res) => {
+    try {
+      const rawData = typeof req.query.data === 'string' ? req.query.data : '';
+      if (!rawData) {
+        return res.status(400).json({
+          error: {
+            code: 'qr_invalid_request',
+            message: 'Missing "data" query parameter.',
+          },
+        });
+      }
+
+      const rawSize = typeof req.query.size === 'string' ? Number.parseInt(req.query.size, 10) : 320;
+      const size = Number.isFinite(rawSize) ? Math.min(600, Math.max(120, rawSize)) : 320;
+      const upstreamUrl = new URL('https://api.qrserver.com/v1/create-qr-code/');
+      upstreamUrl.searchParams.set('size', `${size}x${size}`);
+      upstreamUrl.searchParams.set('data', rawData);
+
+      const upstream = await fetch(upstreamUrl, { method: 'GET' });
+      if (!upstream.ok) {
+        return res.status(502).json({
+          error: {
+            code: 'qr_upstream_error',
+            message: `QR provider request failed (${upstream.status}).`,
+          },
+        });
+      }
+
+      const contentType = upstream.headers.get('content-type') || 'image/png';
+      const cacheControl = upstream.headers.get('cache-control') || 'public, max-age=300';
+      const body = Buffer.from(await upstream.arrayBuffer());
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', cacheControl);
+      return res.status(200).send(body);
+    } catch (error) {
+      logger.error({ err: error }, 'qr proxy route failed');
+      return res.status(500).json({
+        error: {
+          code: 'qr_proxy_failed',
+          message: 'Unexpected error while generating QR image.',
+        },
+      });
+    }
+  });
+
   const zkpassportVerifyHandler: express.RequestHandler = async (req, res) => {
     try {
       const expectedKey = process.env.ZKPASSPORT_VERIFIER_API_KEY?.trim() ?? '';
