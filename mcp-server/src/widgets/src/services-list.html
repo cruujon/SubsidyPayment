@@ -298,6 +298,8 @@
       let widgetState = globals.widgetState;
       let selectingCampaignId = '';
       let selectionError = '';
+      let selectionNotice = '';
+      let selectionNotice = '';
 
       function normalizeStructuredContent(value) {
         if (!value || typeof value !== 'object') return {};
@@ -383,6 +385,8 @@
               category: Array.from(aggregatedCategories),
               relevance_score: null,
               tasks: requiredTasks,
+              offer_count: Number(candidate.offer_count ?? offers.length ?? 0),
+              card_kind: 'service',
             };
           });
         }
@@ -399,6 +403,8 @@
             category: Array.isArray(service.category) ? service.category : [],
             relevance_score: service.relevance_score ?? null,
             tasks: [service.required_task, ...tags].filter((value) => typeof value === 'string' && value.length > 0).slice(0, 3),
+            offer_count: 1,
+            card_kind: 'campaign',
           };
         });
       }
@@ -435,6 +441,7 @@
       async function selectCategory(categoryKey) {
         const nextKey = typeof categoryKey === 'string' && categoryKey.length > 0 ? categoryKey : 'all';
         selectionError = '';
+        selectionNotice = '';
         persistWidgetState({
           ...(currentWidgetState() ?? {}),
           activeCategoryKey: nextKey,
@@ -444,6 +451,7 @@
 
       function updateLocalSearch(query) {
         selectionError = '';
+        selectionNotice = '';
         persistWidgetState({
           ...(currentWidgetState() ?? {}),
           localSearchQuery: typeof query === 'string' ? query : '',
@@ -451,10 +459,12 @@
         safeRender();
       }
 
-      async function selectService(campaignId, serviceKey, serviceName) {
-        if (!campaignId) return;
+      async function selectService(campaignId, serviceKey, serviceName, cardKind) {
+        if (!campaignId && !serviceKey) return;
         selectionError = '';
-        selectingCampaignId = campaignId;
+        selectionNotice = '';
+        const clickKey = campaignId || serviceKey || '';
+        selectingCampaignId = clickKey;
         persistWidgetState({
           ...(currentWidgetState() ?? {}),
           selectedServiceId: campaignId,
@@ -464,7 +474,23 @@
         safeRender();
 
         try {
-          await callTool('get_task_details', { campaign_id: campaignId });
+          const shouldOpenServiceTasks = cardKind === 'service' && !!serviceKey;
+          const toolName = shouldOpenServiceTasks ? 'get_service_tasks' : 'get_task_details';
+          const toolInput = shouldOpenServiceTasks ? { service_key: serviceKey } : { campaign_id: campaignId };
+          const response = await callTool(toolName, toolInput);
+
+          if (response && typeof response === 'object' && response.isError) {
+            const text =
+              Array.isArray(response.content)
+                ? response.content.find((item) => item && item.type === 'text')?.text
+                : '';
+            selectionError = text || 'Unable to open the selected item.';
+          } else {
+            selectionNotice =
+              toolName === 'get_service_tasks'
+                ? `Opening tasks for ${serviceName || serviceKey || 'selected service'}...`
+                : `Opening campaign details for ${serviceName || serviceKey || 'selected campaign'}...`;
+          }
         } catch (error) {
           selectionError = error?.message || 'Unable to open task details.';
           console.error('services-list widget selectService error', error);
@@ -548,6 +574,7 @@
                     data-campaign-id="${escapeHtml(service.campaign_id)}"
                     data-service-key="${escapeHtml(service.service_key)}"
                     data-service-name="${escapeHtml(service.display_name)}"
+                    data-card-kind="${escapeHtml(service.card_kind || '')}"
                     ${service.campaign_id === selectingCampaignId ? 'disabled' : ''}
                   >
                     <div class="service-row">
@@ -609,6 +636,8 @@
           <section class="footer ${selectionError ? 'error' : ''}">${
             selectionError
               ? `⚠️ ${escapeHtml(selectionError)}`
+              : selectionNotice
+                ? `⏳ ${escapeHtml(selectionNotice)}`
               : activeCategory === 'all'
                 ? '💬 Suggested based on your conversation'
                 : `💬 Filtered by ${escapeHtml(toDisplayLabel(activeCategory))}`
@@ -635,8 +664,9 @@
             const campaignId = card.getAttribute('data-campaign-id');
             const serviceKey = card.getAttribute('data-service-key');
             const serviceName = card.getAttribute('data-service-name');
-            if (campaignId && serviceKey) {
-              void selectService(campaignId, serviceKey, serviceName ?? serviceKey);
+            const cardKind = card.getAttribute('data-card-kind') || '';
+            if (campaignId || serviceKey) {
+              void selectService(campaignId, serviceKey, serviceName ?? serviceKey, cardKind);
             }
           });
         }
