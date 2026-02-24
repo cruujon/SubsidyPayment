@@ -26,6 +26,7 @@ import type {
   RunServiceInput,
   SearchServicesParams,
   SetPreferencesInput,
+  ZkpassportSessionResponse,
 } from './types.ts';
 
 export class BackendClientError extends Error {
@@ -108,6 +109,13 @@ export class BackendClient {
           consent: payload.consent,
         }),
       }
+    );
+  }
+
+  async getZkpassportSession(verificationToken: string): Promise<ZkpassportSessionResponse> {
+    return this.request<ZkpassportSessionResponse>(
+      `/zkpassport/session/${encodeURIComponent(verificationToken)}`,
+      { method: 'GET' }
     );
   }
 

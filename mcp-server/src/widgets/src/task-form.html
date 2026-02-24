@@ -179,6 +179,78 @@
         font-size: 12px;
       }
 
+      .zk-panel {
+        margin-top: 10px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(15, 23, 42, 0.5);
+        padding: 12px;
+      }
+
+      .zk-panel-title {
+        margin: 0 0 6px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .zk-panel-text {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .zk-qr-wrap {
+        margin-top: 10px;
+        display: grid;
+        place-items: center;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        background: rgba(255, 255, 255, 0.04);
+        padding: 10px;
+      }
+
+      .zk-qr {
+        width: min(220px, 100%);
+        aspect-ratio: 1 / 1;
+        border-radius: 8px;
+        background: #fff;
+        object-fit: contain;
+      }
+
+      .zk-links {
+        display: grid;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .zk-link-btn {
+        width: 100%;
+        border-radius: 9px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text);
+        padding: 9px 12px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      .zk-link-btn.primary {
+        border-color: var(--accent);
+        background: rgba(14, 165, 233, 0.14);
+        color: #bae6fd;
+      }
+
+      .zk-url {
+        margin-top: 8px;
+        border-radius: 8px;
+        border: 1px dashed rgba(148, 163, 184, 0.25);
+        background: rgba(15, 23, 42, 0.35);
+        padding: 8px;
+        color: var(--muted);
+        font-size: 11px;
+        word-break: break-all;
+      }
+
       .verify-btn {
         width: 100%;
         margin-top: 10px;
@@ -291,6 +363,7 @@
       const { app, toolOutput, widgetState } = initWidget();
       const root = document.getElementById('app');
       const data = toolOutput?.structuredContent ?? {};
+      let zkVerificationUi = null;
 
       const campaignId = data.campaign_id ?? '';
       const sponsor = data.sponsor ?? 'Sponsor';
@@ -319,6 +392,19 @@
 
       async function callTool(name, input) {
         return app?.callTool?.(name, input);
+      }
+
+      async function openExternalLink(url) {
+        if (!url || typeof url !== 'string') return;
+        if (typeof app?.openLink === 'function') {
+          try {
+            await app.openLink({ url });
+            return;
+          } catch (error) {
+            // Fall back to window.open below.
+          }
+        }
+        window.open(url, '_blank', 'noopener,noreferrer');
       }
 
       function collectFields(form) {
@@ -386,6 +472,18 @@
               response?.structuredContent?.verification_url ??
               response?._meta?.full_response?.verification_url ??
               null;
+            const zkpassportRequestUrl =
+              response?.structuredContent?.zkpassport_request_url ??
+              response?._meta?.full_response?.zkpassport_request_url ??
+              null;
+            const qrImageUrl =
+              response?.structuredContent?.qr_image_url ??
+              response?._meta?.full_response?.qr_image_url ??
+              null;
+            const installUrl =
+              response?.structuredContent?.zkpassport_install_url ??
+              response?._meta?.full_response?.zkpassport_install_url ??
+              'https://zkpassport.id/';
 
             if (typeof verificationUrl !== 'string' || verificationUrl.length === 0) {
               if (err) {
@@ -395,9 +493,27 @@
               return;
             }
 
-            window.open(verificationUrl, '_blank', 'noopener,noreferrer');
+            zkVerificationUi = {
+              verificationUrl,
+              requestUrl: typeof zkpassportRequestUrl === 'string' && zkpassportRequestUrl.length > 0 ? zkpassportRequestUrl : null,
+              qrTargetUrl:
+                typeof zkpassportRequestUrl === 'string' && zkpassportRequestUrl.length > 0
+                  ? zkpassportRequestUrl
+                  : verificationUrl,
+              expiresAt:
+                response?.structuredContent?.expires_at ??
+                response?._meta?.full_response?.expires_at ??
+                null,
+              qrImageUrl: typeof qrImageUrl === 'string' && qrImageUrl.length > 0 ? qrImageUrl : null,
+              installUrl: typeof installUrl === 'string' && installUrl.length > 0 ? installUrl : 'https://zkpassport.id/',
+              qrImageFailed: false,
+            };
+            render();
             if (err) {
-              err.textContent = 'Verification opened in a new tab. Complete it and return to GPT.';
+              err.textContent =
+                zkVerificationUi.requestUrl
+                  ? 'QR code ready below. Scan it with zkPassport to complete the verification challenge.'
+                  : 'QR code ready below. Scan it or open the verification page.';
               err.style.color = 'var(--muted)';
             }
             return;
@@ -468,6 +584,52 @@
           .join('');
       }
 
+      function buildZkVerificationPanel() {
+        if (!isZkpassportTask || !zkVerificationUi || typeof zkVerificationUi.qrTargetUrl !== 'string') {
+          return '';
+        }
+
+        const expiresLabel =
+          typeof zkVerificationUi.expiresAt === 'string' && zkVerificationUi.expiresAt.length > 0
+            ? `Session expires at ${new Date(zkVerificationUi.expiresAt).toLocaleString()}.`
+            : 'Session expires soon. Create a new session if it times out.';
+
+        const hasDirectChallenge = typeof zkVerificationUi.requestUrl === 'string' && zkVerificationUi.requestUrl.length > 0;
+        const qrHtml =
+          zkVerificationUi.qrImageFailed || !zkVerificationUi.qrImageUrl
+            ? `<div class="verify-note">QR image could not load in this environment. Use the button below to open the verification page or install zkPassport.</div>`
+            : `
+              <div class="zk-qr-wrap">
+                <img class="zk-qr" src="${escapeHtml(zkVerificationUi.qrImageUrl)}" alt="QR code for zkPassport verification challenge" />
+              </div>
+            `;
+
+        return `
+          <section class="zk-panel" id="zk-panel">
+            <p class="zk-panel-title">Scan to continue verification</p>
+            <p class="zk-panel-text">${
+              hasDirectChallenge
+                ? 'This QR opens the zkPassport verification challenge directly on your phone.'
+                : 'This QR opens your hosted verification page, which then generates the zkPassport verification request.'
+            }</p>
+            ${qrHtml}
+            <div class="zk-links">
+              <button type="button" class="zk-link-btn primary" id="zk-open-primary-link">${
+                hasDirectChallenge ? 'Open zkPassport challenge' : 'Open verification page'
+              }</button>
+              ${
+                hasDirectChallenge
+                  ? '<button type="button" class="zk-link-btn" id="zk-open-verify-page">Open hosted verification page</button>'
+                  : ''
+              }
+              <button type="button" class="zk-link-btn" id="zk-open-install-link">Get zkPassport app</button>
+            </div>
+            <div class="zk-url">${escapeHtml(zkVerificationUi.qrTargetUrl)}</div>
+            <p class="zk-panel-text" style="margin-top: 8px;">${escapeHtml(expiresLabel)}</p>
+          </section>
+        `;
+      }
+
       function render() {
         if (!root) return;
 
@@ -513,6 +675,7 @@
           <section class="verify">
             <div class="verify-note">ℹ️ ${escapeHtml(taskDescription)}</div>
             <button class="verify-btn" id="verify-btn">${isZkpassportTask ? 'Verify age & country' : 'Submit for Verification'}</button>
+            ${buildZkVerificationPanel()}
             <button class="alt" id="direct-payment">Use direct payment instead</button>
             <p class="error"></p>
           </section>
@@ -525,6 +688,25 @@
 
         root.querySelector('#direct-payment')?.addEventListener('click', () => {
           void onDirectPayment();
+        });
+
+        root.querySelector('#zk-open-primary-link')?.addEventListener('click', () => {
+          void openExternalLink(zkVerificationUi?.qrTargetUrl || '');
+        });
+
+        root.querySelector('#zk-open-verify-page')?.addEventListener('click', () => {
+          void openExternalLink(zkVerificationUi?.verificationUrl || '');
+        });
+
+        root.querySelector('#zk-open-install-link')?.addEventListener('click', () => {
+          void openExternalLink(zkVerificationUi?.installUrl || 'https://zkpassport.id/');
+        });
+
+        root.querySelector('.zk-qr')?.addEventListener('error', () => {
+          if (zkVerificationUi) {
+            zkVerificationUi.qrImageFailed = true;
+            render();
+          }
         });
 
         root.querySelector('#verify-btn')?.addEventListener('click', () => {

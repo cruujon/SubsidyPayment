@@ -150,6 +150,18 @@ export interface GptInitZkpassportVerificationResponse {
   message: string;
 }
 
+export interface ZkpassportSessionResponse {
+  verification_id: string;
+  campaign_id: string;
+  required_task: string;
+  min_age: number;
+  allowed_country_labels: string[];
+  scope: string;
+  status: string;
+  expires_at: string;
+  message: string;
+}
+
 export interface GptRunServiceResponse {
   service: string;
   output: string;
