@@ -41,6 +41,26 @@ Notes:
 - This operation is irreversible. Verify the target DB before running.
 - `psql` command is required.
 
+## Seed sample data (operations scripts)
+
+For development/testing, you can use the following seed scripts.
+
+```bash
+# Seed sample Sponsored Service data
+./scripts/seed-sample-services.sh
+
+# Seed GitHub Issue campaign data
+./scripts/seed-github-issue-campaign.sh
+
+# Explicit target DB
+DATABASE_URL=postgres://postgres:postgres@localhost:55432/payloadexchange ./scripts/seed-sample-services.sh
+DATABASE_URL=postgres://postgres:postgres@localhost:55432/payloadexchange ./scripts/seed-github-issue-campaign.sh
+```
+
+Notes:
+- Both scripts are re-runnable (UPSERT-based).
+- If `DATABASE_URL` is not set, local defaults are used.
+
 ## Current tables
 
 | Table | Added in | Purpose |

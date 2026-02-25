@@ -41,6 +41,26 @@ DATABASE_URL=postgres://postgres:postgres@localhost:55432/payloadexchange ./scri
 - この操作は取り消せません。実行前に対象DBを必ず確認してください。
 - `psql` コマンドが必要です。
 
+## サンプルデータを投入する（運用スクリプト）
+
+開発・検証用に、以下の投入スクリプトを利用できます。
+
+```bash
+# Sponsored Service のサンプルデータ投入
+./scripts/seed-sample-services.sh
+
+# GitHub Issue 作成用 Campaign データ投入
+./scripts/seed-github-issue-campaign.sh
+
+# 接続先を明示して実行する場合
+DATABASE_URL=postgres://postgres:postgres@localhost:55432/payloadexchange ./scripts/seed-sample-services.sh
+DATABASE_URL=postgres://postgres:postgres@localhost:55432/payloadexchange ./scripts/seed-github-issue-campaign.sh
+```
+
+補足:
+- どちらのスクリプトも再実行可能（UPSERT）です。
+- `DATABASE_URL` 未指定時はローカル既定値を使用します。
+
 ## 現在のテーブル一覧
 
 | テーブル | 追加マイグレーション | 用途 |
