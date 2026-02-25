@@ -1870,6 +1870,232 @@ async fn gpt_complete_task_handles_consent_refused() {
 }
 
 #[tokio::test]
+async fn gpt_complete_task_rejects_invalid_feedback_rating_details() {
+    if let Ok(url) = std::env::var("DATABASE_URL") {
+        use sqlx::postgres::PgPoolOptions;
+        if let Ok(pool) = PgPoolOptions::new().max_connections(1).connect(&url).await {
+            sqlx::migrate!("./migrations").run(&pool).await.ok();
+
+            let user_id = Uuid::new_v4();
+            let email = format!(
+                "gpt_complete_invalid_feedback_{}@example.com",
+                Uuid::new_v4()
+            );
+            sqlx::query(
+                "INSERT INTO users (id, email, region, roles, tools_used, attributes, source) \
+                 VALUES ($1, $2, 'JP', '{}', '{}', '{}'::jsonb, 'gpt_apps')",
+            )
+            .bind(user_id)
+            .bind(&email)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+            let session_token: Uuid = sqlx::query_scalar(
+                "INSERT INTO gpt_sessions (user_id) VALUES ($1) RETURNING token",
+            )
+            .bind(user_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+            let campaign_id = Uuid::new_v4();
+            sqlx::query(
+                "INSERT INTO campaigns (id, name, sponsor, target_roles, target_tools, required_task, \
+                 subsidy_per_call_cents, budget_total_cents, budget_remaining_cents, query_urls, active, created_at) \
+                 VALUES ($1, 'Invalid Feedback Campaign', 'Acme', '{}', '{}', 'share_feedback', \
+                 120, 10000, 10000, '{}', true, NOW())",
+            )
+            .bind(campaign_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+            let state = SharedState {
+                inner: Arc::new(RwLock::new(AppState::new())),
+            };
+
+            let payload = types::GptCompleteTaskRequest {
+                session_token,
+                task_name: "share_feedback".to_string(),
+                details: Some(
+                    r#"{"product_link":"https://example.com/product","feedback_rating":6,"feedback_tags":"Cost","feedback_reason":"Need better onboarding docs."}"#
+                        .to_string(),
+                ),
+                consent: types::GptConsentInput {
+                    data_sharing_agreed: true,
+                    purpose_acknowledged: true,
+                    contact_permission: true,
+                },
+            };
+
+            let result = gpt::gpt_complete_task(
+                axum::extract::State(state),
+                axum::extract::Path(campaign_id),
+                axum::Json(payload),
+            )
+            .await;
+
+            assert_eq!(result.status(), axum::http::StatusCode::BAD_REQUEST);
+            let err_str = read_body_string(result).await;
+            assert!(
+                err_str.contains("feedback_rating"),
+                "should mention feedback_rating validation, got: {err_str}"
+            );
+
+            let completion_count: i64 = sqlx::query_scalar(
+                "SELECT count(*) FROM task_completions WHERE campaign_id = $1 AND user_id = $2",
+            )
+            .bind(campaign_id)
+            .bind(user_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            assert_eq!(
+                completion_count, 0,
+                "invalid details should not be inserted"
+            );
+
+            sqlx::query("DELETE FROM task_completions WHERE campaign_id = $1")
+                .bind(campaign_id)
+                .execute(&pool)
+                .await
+                .ok();
+            sqlx::query("DELETE FROM consents WHERE campaign_id = $1")
+                .bind(campaign_id)
+                .execute(&pool)
+                .await
+                .ok();
+            sqlx::query("DELETE FROM gpt_sessions WHERE user_id = $1")
+                .bind(user_id)
+                .execute(&pool)
+                .await
+                .ok();
+            sqlx::query("DELETE FROM campaigns WHERE id = $1")
+                .bind(campaign_id)
+                .execute(&pool)
+                .await
+                .ok();
+            sqlx::query("DELETE FROM users WHERE id = $1")
+                .bind(user_id)
+                .execute(&pool)
+                .await
+                .ok();
+        }
+    }
+}
+
+#[tokio::test]
+async fn gpt_complete_task_accepts_valid_feedback_details_json() {
+    if let Ok(url) = std::env::var("DATABASE_URL") {
+        use sqlx::postgres::PgPoolOptions;
+        if let Ok(pool) = PgPoolOptions::new().max_connections(1).connect(&url).await {
+            sqlx::migrate!("./migrations").run(&pool).await.ok();
+
+            let user_id = Uuid::new_v4();
+            let email = format!("gpt_complete_valid_feedback_{}@example.com", Uuid::new_v4());
+            sqlx::query(
+                "INSERT INTO users (id, email, region, roles, tools_used, attributes, source) \
+                 VALUES ($1, $2, 'JP', '{}', '{}', '{}'::jsonb, 'gpt_apps')",
+            )
+            .bind(user_id)
+            .bind(&email)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+            let session_token: Uuid = sqlx::query_scalar(
+                "INSERT INTO gpt_sessions (user_id) VALUES ($1) RETURNING token",
+            )
+            .bind(user_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+            let campaign_id = Uuid::new_v4();
+            sqlx::query(
+                "INSERT INTO campaigns (id, name, sponsor, target_roles, target_tools, required_task, \
+                 subsidy_per_call_cents, budget_total_cents, budget_remaining_cents, query_urls, active, created_at) \
+                 VALUES ($1, 'Valid Feedback Campaign', 'Acme', '{}', '{}', 'share_feedback', \
+                 120, 10000, 10000, '{}', true, NOW())",
+            )
+            .bind(campaign_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+            let state = SharedState {
+                inner: Arc::new(RwLock::new(AppState::new())),
+            };
+
+            let payload = types::GptCompleteTaskRequest {
+                session_token,
+                task_name: "share_feedback".to_string(),
+                details: Some(
+                    r#"{"product_link":"https://example.com/product","feedback_rating":"4","feedback_tags":"Cost, Usability","feedback_reason":"Onboarding copy is ambiguous; please add setup examples."}"#
+                        .to_string(),
+                ),
+                consent: types::GptConsentInput {
+                    data_sharing_agreed: true,
+                    purpose_acknowledged: true,
+                    contact_permission: true,
+                },
+            };
+
+            let result = gpt::gpt_complete_task(
+                axum::extract::State(state),
+                axum::extract::Path(campaign_id),
+                axum::Json(payload),
+            )
+            .await;
+
+            assert!(
+                result.status().is_success(),
+                "valid feedback details should succeed"
+            );
+
+            let saved_details: Option<String> = sqlx::query_scalar(
+                "SELECT details FROM task_completions WHERE campaign_id = $1 AND user_id = $2 ORDER BY created_at DESC LIMIT 1",
+            )
+            .bind(campaign_id)
+            .bind(user_id)
+            .fetch_optional(&pool)
+            .await
+            .unwrap();
+            let saved_details = saved_details.unwrap_or_default();
+            assert!(saved_details.contains("feedback_rating"));
+            assert!(saved_details.contains("feedback_reason"));
+
+            sqlx::query("DELETE FROM task_completions WHERE campaign_id = $1")
+                .bind(campaign_id)
+                .execute(&pool)
+                .await
+                .ok();
+            sqlx::query("DELETE FROM consents WHERE campaign_id = $1")
+                .bind(campaign_id)
+                .execute(&pool)
+                .await
+                .ok();
+            sqlx::query("DELETE FROM gpt_sessions WHERE user_id = $1")
+                .bind(user_id)
+                .execute(&pool)
+                .await
+                .ok();
+            sqlx::query("DELETE FROM campaigns WHERE id = $1")
+                .bind(campaign_id)
+                .execute(&pool)
+                .await
+                .ok();
+            sqlx::query("DELETE FROM users WHERE id = $1")
+                .bind(user_id)
+                .execute(&pool)
+                .await
+                .ok();
+        }
+    }
+}
+
+#[tokio::test]
 async fn gpt_complete_task_returns_not_found_for_missing_campaign() {
     if let Ok(url) = std::env::var("DATABASE_URL") {
         use sqlx::postgres::PgPoolOptions;

@@ -24,6 +24,9 @@ assert.match(getTaskSrc, /session_token/, 'get_task_details must use session_tok
 assert.match(completeTaskSrc, /registerAppTool\(\s*server\s*,\s*['"]complete_task['"]/, 'must register complete_task');
 assert.match(completeTaskSrc, /securitySchemes:[\s\S]*type:\s*['"]oauth2['"]/, 'complete_task must require oauth2');
 assert.match(completeTaskSrc, /consent:\s*z\.object\(/, 'complete_task must validate consent object');
+assert.match(completeTaskSrc, /feedback:\s*z[\s\S]*\.object\(/, 'complete_task should accept typed feedback input');
+assert.match(completeTaskSrc, /feedback_rating/, 'complete_task feedback must include rating field');
+assert.match(completeTaskSrc, /JSON\.stringify\(/, 'complete_task should serialize feedback into details');
 assert.match(completeTaskSrc, /completeTask\(/, 'must call BackendClient.completeTask');
 assert.match(completeTaskSrc, /consent_recorded|can_use_service/, 'complete_task must return completion fields');
 assert.match(completeTaskSrc, /session_token/, 'complete_task must use session_token');

@@ -12,6 +12,14 @@ const completeTaskInputSchema = z.object({
   campaign_id: z.string().uuid(),
   task_name: z.string(),
   details: z.string().optional(),
+  feedback: z
+    .object({
+      product_link: z.string().url(),
+      feedback_rating: z.number().int().min(1).max(5),
+      feedback_tags: z.string().min(1),
+      feedback_reason: z.string().min(6),
+    })
+    .optional(),
   session_token: z.string().optional(),
   consent: z.object({
     data_sharing_agreed: z.boolean(),
@@ -90,7 +98,16 @@ export function registerCompleteTaskTool(server: McpServer, config: BackendConfi
           campaign_id: input.campaign_id,
           session_token: sessionToken,
           task_name: input.task_name,
-          details: input.details,
+          details:
+            input.details ??
+            (input.feedback
+              ? JSON.stringify({
+                  product_link: input.feedback.product_link,
+                  feedback_rating: input.feedback.feedback_rating,
+                  feedback_tags: input.feedback.feedback_tags,
+                  feedback_reason: input.feedback.feedback_reason,
+                })
+              : undefined),
           consent: input.consent,
         };
 

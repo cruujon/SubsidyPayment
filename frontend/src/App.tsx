@@ -1,6 +1,9 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { LandingBackground3D } from "./components/LandingBackground3D";
-import { KPI_OPTIONS, SERVICE_CATEGORIES, TASK_CATEGORIES, defaultCampaignForm } from "./utils/contants";
+import {
+  KPI_OPTIONS,
+  defaultCampaignForm
+} from "./utils/contants";
 import { formatDuration, parseAppDeepLink, percentile, splitCsv, taskCategoryFromText } from "./utils/helpers";
 import type {
   AppView,
@@ -61,17 +64,17 @@ function App() {
   const [currentUserEmail, setCurrentUserEmail] = useState(() => {
     return localStorage.getItem("currentUserEmail") || "";
   });
+  const [currentDate, setCurrentDate] = useState(() => new Date());
 
   const apiBaseUrl = useMemo(() => {
     const configured = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
     if (configured) {
-      return configured.replace(/\/+$/, "");
+      const normalized = configured.replace(/^['"]+|['";\s]+$/g, "");
+      if (normalized) {
+        return normalized.replace(/\/+$/, "");
+      }
     }
-    const hostname = window.location.hostname;
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
-      return "/api";
-    }
-    return "https://subsidypayment-1k0h.onrender.com";
+    return "/api";
   }, []);
 
   // サービスが選択されたときに、serviceConfigsを更新
@@ -240,6 +243,26 @@ function App() {
     // Save login state to localStorage when it changes
     localStorage.setItem("isLoggedIn", JSON.stringify(isLoggedIn));
   }, [isLoggedIn]);
+
+  useEffect(() => {
+    const timerId = window.setInterval(() => {
+      setCurrentDate(new Date());
+    }, 60_000);
+
+    return () => window.clearInterval(timerId);
+  }, []);
+
+  const headerDateLabel = useMemo(
+    () =>
+      currentDate.toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric"
+      }),
+    [currentDate]
+  );
+
+  const headerDateBadge = useMemo(() => String(currentDate.getDate()), [currentDate]);
 
   const toggleDarkMode = () => {
     setDarkMode((prev: boolean) => !prev);
@@ -560,6 +583,64 @@ function App() {
     };
   }, [profiles, currentUserEmail]);
 
+  const serviceCategories = useMemo(() => {
+    const campaignTools = Array.from(
+      new Set(
+        campaigns
+          .flatMap((campaign) => campaign.target_tools)
+          .map((tool) => tool.trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+
+    const sponsoredApiNames = Array.from(
+      new Set(
+        sponsoredApis
+          .map((api) => api.name.trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+
+    const categories: Array<{ name: string; services: string[] }> = [];
+    if (campaignTools.length > 0) {
+      categories.push({ name: "Campaign Tools", services: campaignTools });
+    }
+    if (sponsoredApiNames.length > 0) {
+      categories.push({ name: "Sponsored APIs", services: sponsoredApiNames });
+    }
+
+    return categories;
+  }, [campaigns, sponsoredApis]);
+
+  const taskCategories = useMemo(() => {
+    const tasks = Array.from(
+      new Set(
+        campaigns
+          .map((campaign) => campaign.required_task?.trim())
+          .filter((task): task is string => Boolean(task))
+      )
+    );
+
+    if (tasks.length === 0) {
+      return [];
+    }
+
+    const grouped = new Map<string, string[]>();
+    tasks.forEach((task) => {
+      const category = taskCategoryFromText(task);
+      const rows = grouped.get(category) ?? [];
+      rows.push(task);
+      grouped.set(category, rows);
+    });
+
+    return Array.from(grouped.entries())
+      .map(([name, categoryTasks]) => ({
+        name,
+        tasks: Array.from(new Set(categoryTasks)).sort((a, b) => a.localeCompare(b))
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [campaigns]);
+
   async function onCreateCampaign(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setCreateLoading(true);
@@ -656,8 +737,6 @@ function App() {
         headers["payment-signature"] = paymentSignature;
       }
 
-      // 環境変数からAPIのベースURLを取得
-      const apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
       const response = await fetch(`${apiBaseUrl}${path}`, {
         method: "POST",
         headers,
@@ -772,8 +851,8 @@ function App() {
             </svg>
           </button>
           <div className="date-badge">
-            <span>Mon, Feb 9</span>
-            <span className="badge">12</span>
+            <span>{headerDateLabel}</span>
+            <span className="badge">{headerDateBadge}</span>
           </div>
           <button className="icon-btn">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1170,7 +1249,7 @@ function App() {
                       </button>
                       {showServiceDropdown && (
                         <div className="service-dropdown">
-                          {SERVICE_CATEGORIES.map((category) => (
+                          {serviceCategories.map((category) => (
                             <div key={category.name} className="service-category">
                               <div className="service-category-header">{category.name}</div>
                               {category.services.map((service) => (
@@ -1235,7 +1314,7 @@ function App() {
                             <div className="form-group">
                               <label>Required Tasks (multiple selection)</label>
                               <div className="task-checkboxes">
-                                {TASK_CATEGORIES.map((category) => (
+                                {taskCategories.map((category) => (
                                   <div key={category.name} className="task-category-group">
                                     <div className="task-category-label">{category.name}</div>
                                     {category.tasks.map((task) => (

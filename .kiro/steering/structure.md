@@ -121,8 +121,8 @@ SubsidyPayment/
 | テーブル | 用途 |
 |---|---|
 | `users` | GPT Apps ユーザー |
-| `resources` | x402 保護リソース |
-| `offers` | スポンサーオファー |
+| `sponsored_apis` | スポンサー API 定義 |
+| `sponsored_api_calls` | スポンサー API 呼び出し履歴 |
 | `campaigns` | スポンサーキャンペーン |
 | `task_completions` | タスク完了記録 |
 | `payments` | 支払い記録 |
@@ -130,7 +130,6 @@ SubsidyPayment/
 | `consents` | 同意レコード |
 | `gpt_sessions` | GPT セッション |
 | `user_task_preferences` | 嗜好設定 |
-| `campaign_tags` | キャンペーンタグ |
 | `gpt_service_runs` | GPT サービス実行履歴 |
 | `zkpassport_verifications` | zkPassport 検証 |
 
@@ -145,3 +144,9 @@ SubsidyPayment/
 - **zkPassport 連携**: 検証ページ + セッション API を提供
 - **MCP App 構成**: OAuth + MCP Tools + Vite singlefile ウィジェットを同一リポジトリで運用
 - **フロントエンド**: `App.tsx` + 3D コンポーネント分割構成
+
+## Sync Notes（2026-02-25）
+
+- **Task Widget 拡張パターン**: `mcp-server/src/widgets/src/task-form.html` では、タスク実行UIの下流に「Product Feedback」ブロックを追加し、`details` に構造化保存する。
+- **保存フォーマット方針**: `details` は JSON 文字列として維持し、後方互換のため API スキーマ（`complete_task`）は変更しない。
+- **DB 記述ドリフト注意**: 現行 migration では `resources` / `offers` / `campaign_tags` テーブルは存在せず、該当情報は `campaigns` や関連カラムで管理される。DB概要を参照する際は `migrations/` を正とする。
