@@ -1,4 +1,4 @@
-# Architecture — SubsidyPayment（更新: 2026-02-20）
+# Architecture — SubsidyPayment（更新: 2026-02-25）
 
 ## システム全体
 ```
@@ -13,13 +13,13 @@ Rust Backend (Axum)
   ├─ OpenAPI / Privacy / Metrics
   └─ x402 verify/settle 連携
   ↓
-PostgreSQL (SQLx migrations 0001-0013)
+PostgreSQL (SQLx migrations 0001-0014)
 
 MCP Server (Node + Express + MCP SDK)
   ├─ /mcp (Streamable HTTP)
   ├─ OAuth metadata endpoints
-  ├─ Tools: search/auth/task/run/user/preferences
-  └─ Widgets: services-list, service-tasks, task-form, service-access, user-dashboard
+  ├─ Tools: search/auth/campaign/task/zkpassport/run/user/preferences/weather/github-issue
+  └─ Widgets: services-list, services-list-v2, service-tasks, task-form, service-access, user-dashboard
   ↓
 Rust /gpt/* API へHTTP委譲
 ```
@@ -39,7 +39,7 @@ Rust /gpt/* API へHTTP委譲
 - `search_services` は noauth、他ツールは OAuth/noauth 切替可能設計
 
 ## DB スキーマ状況
-- マイグレーションは `0013_gpt_service_runs.sql` まで存在
+- マイグレーションは `0014_zkpassport_verifications.sql` まで存在
 - 主要テーブル:
   - `users`, `campaigns`, `task_completions`, `payments`, `creator_events`
   - `sponsored_apis`, `sponsored_api_calls`

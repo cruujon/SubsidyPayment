@@ -1,4 +1,4 @@
-# Style and Conventions（更新: 2026-02-20）
+# Style and Conventions（更新: 2026-02-25）
 
 ## 全体
 - 思考は英語、プロジェクト内 Markdown は日本語を維持

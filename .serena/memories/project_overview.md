@@ -1,4 +1,4 @@
-# Project Overview — SubsidyPayment（更新: 2026-02-20）
+# Project Overview — SubsidyPayment（更新: 2026-02-25）
 
 ## 目的
 x402 の HTTP 402 ペイウォールをプロキシで仲介し、
@@ -14,7 +14,7 @@ x402 の HTTP 402 ペイウォールをプロキシで仲介し、
 - MCP サーバー（`mcp-server/`）
   - Streamable HTTP `/mcp`
   - OAuth メタデータ公開（`.well-known/oauth-*`）
-  - 10ツール + 5ウィジェットを Rust `/gpt/*` と接続
+  - 14ツール + 6ウィジェットリソースを Rust `/gpt/*` と接続
 - Frontend（`frontend/`）
   - React + Vite のWeb UI（`App.tsx` 中心）
 - サンプル x402 サーバー（`x402server/`）

@@ -1,4 +1,4 @@
-# Suggested Commands（更新: 2026-02-20）
+# Suggested Commands（更新: 2026-02-25）
 
 ## バックエンド（Rust）
 ```bash
