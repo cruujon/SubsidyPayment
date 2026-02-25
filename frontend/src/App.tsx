@@ -61,6 +61,7 @@ function App() {
   const [currentUserEmail, setCurrentUserEmail] = useState(() => {
     return localStorage.getItem("currentUserEmail") || "";
   });
+  const [currentDate, setCurrentDate] = useState(() => new Date());
 
   const apiBaseUrl = useMemo(() => {
     const configured = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
@@ -240,6 +241,26 @@ function App() {
     // Save login state to localStorage when it changes
     localStorage.setItem("isLoggedIn", JSON.stringify(isLoggedIn));
   }, [isLoggedIn]);
+
+  useEffect(() => {
+    const timerId = window.setInterval(() => {
+      setCurrentDate(new Date());
+    }, 60_000);
+
+    return () => window.clearInterval(timerId);
+  }, []);
+
+  const headerDateLabel = useMemo(
+    () =>
+      currentDate.toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric"
+      }),
+    [currentDate]
+  );
+
+  const headerDateBadge = useMemo(() => String(currentDate.getDate()), [currentDate]);
 
   const toggleDarkMode = () => {
     setDarkMode((prev: boolean) => !prev);
@@ -772,8 +793,8 @@ function App() {
             </svg>
           </button>
           <div className="date-badge">
-            <span>Mon, Feb 9</span>
-            <span className="badge">12</span>
+            <span>{headerDateLabel}</span>
+            <span className="badge">{headerDateBadge}</span>
           </div>
           <button className="icon-btn">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
