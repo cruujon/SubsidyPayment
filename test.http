@@ -1,0 +1,123 @@
+### SubsidyPayment Backend Test Suite (Success Patterns Only)
+### Usage: VS Code REST Client extension
+### Run top-to-bottom in order.
+
+@baseUrl = http://localhost:3000
+@contentType = application/json
+@sponsorWallet = 0x1111111111111111111111111111111111111111
+
+### 0) Health
+GET {{baseUrl}}/health
+Content-Type: {{contentType}}
+
+### 1) OpenAPI YAML
+GET {{baseUrl}}/.well-known/openapi.yaml
+
+### 2) Privacy page
+GET {{baseUrl}}/privacy
+
+### 3) Create profile
+# @name createProfile
+POST {{baseUrl}}/profiles
+Content-Type: {{contentType}}
+
+{
+  "email": "creator.normal@example.com",
+  "region": "JP",
+  "roles": ["developer", "creator"],
+  "tools_used": ["scraping", "design"],
+  "attributes": {
+    "plan": "starter",
+    "source": "http-test"
+  }
+}
+
+### 4) List profiles
+GET {{baseUrl}}/profiles
+Content-Type: {{contentType}}
+
+### 5) Register user (alias endpoint)
+# @name registerUser
+POST {{baseUrl}}/register
+Content-Type: {{contentType}}
+
+{
+  "email": "registered.normal@example.com",
+  "region": "US",
+  "roles": ["builder"],
+  "tools_used": ["storage"]
+}
+
+### 6) Create campaign
+# @name createCampaign
+POST {{baseUrl}}/campaigns
+Content-Type: {{contentType}}
+
+{
+  "name": "Normal Campaign",
+  "sponsor": "ACME",
+  "sponsor_wallet_address": "{{sponsorWallet}}",
+  "target_roles": ["developer"],
+  "target_tools": ["scraping", "design"],
+  "required_task": "Share email address",
+  "subsidy_per_call_cents": 5,
+  "budget_cents": 1000,
+  "query_urls": ["https://example.com/search?q=campaign"]
+}
+
+### 7) List campaigns
+GET {{baseUrl}}/campaigns
+Content-Type: {{contentType}}
+
+### 8) List campaigns filtered by sponsor wallet
+GET {{baseUrl}}/campaigns?sponsor_wallet_address={{sponsorWallet}}
+Content-Type: {{contentType}}
+
+### 9) Get campaign by ID
+GET {{baseUrl}}/campaigns/{{createCampaign.response.body.$.campaign.id}}
+Content-Type: {{contentType}}
+
+### 10) Campaign discovery list
+GET {{baseUrl}}/campaigns/discovery
+Content-Type: {{contentType}}
+
+### 11) Complete task
+# @name completeTask
+POST {{baseUrl}}/tasks/complete
+Content-Type: {{contentType}}
+
+{
+  "campaign_id": "{{createCampaign.response.body.$.campaign.id}}",
+  "user_id": "{{createProfile.response.body.$.id}}",
+  "task_name": "Share email address",
+  "details": "{\"email\":\"creator.normal@example.com\"}"
+}
+
+### 12) Sponsor dashboard
+GET {{baseUrl}}/dashboard/sponsor/{{createCampaign.response.body.$.campaign.id}}
+Content-Type: {{contentType}}
+
+### 13) Record creator metric event
+POST {{baseUrl}}/creator/metrics/event
+Content-Type: {{contentType}}
+
+{
+  "skill_name": "scraping",
+  "platform": "web",
+  "event_type": "completed",
+  "duration_ms": 1300,
+  "success": true
+}
+
+### 14) Read creator metrics summary
+GET {{baseUrl}}/creator/metrics
+Content-Type: {{contentType}}
+
+### 15) Prometheus metrics
+GET {{baseUrl}}/metrics
+
+### Notes
+### - This file intentionally excludes paid-path endpoints:
+###   /tool/{service}/run, /proxy/{service}/run, /sponsored-apis (create/run)
+###   because they require x402 payment setup or specific sponsor-budget preconditions.
+### - If you want, I can create a second paid-flow test file with the required headers/envs.
