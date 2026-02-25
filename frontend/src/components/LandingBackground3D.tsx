@@ -2,6 +2,14 @@
 import { Canvas, useFrame } from "@react-three/fiber";
 import { useRef } from "react";
 import * as THREE from "three";
+import {
+  LANDING_BACKGROUND_CLASS_NAME,
+  LANDING_BACKGROUND_COLOR,
+  LANDING_CANVAS_CAMERA,
+  LANDING_CANVAS_DPR,
+  LANDING_CANVAS_GL
+} from "../utils/contants";
+import { ambientRotationX } from "../utils/helpers";
 
 /**
  * AmbientShape Component
@@ -13,7 +21,7 @@ function AmbientShape() {
   useFrame((state, delta) => {
     if (groupRef.current) {
       groupRef.current.rotation.y += delta * 0.12;
-      groupRef.current.rotation.x = Math.sin(state.clock.elapsedTime * 0.15) * 0.08;
+      groupRef.current.rotation.x = ambientRotationX(state.clock.elapsedTime);
     }
     if (meshRef.current) {
       meshRef.current.rotation.z += delta * 0.05;
@@ -65,13 +73,13 @@ function AmbientShape() {
  */
 export function LandingBackground3D() {
   return (
-    <div className="landing-background-3d" aria-hidden>
+    <div className={LANDING_BACKGROUND_CLASS_NAME} aria-hidden>
       <Canvas
-        camera={{ position: [0, 0, 5], fov: 50 }}
-        dpr={[1, 1.5]}
-        gl={{ alpha: true, antialias: true, powerPreference: "low-power" }}
+        camera={LANDING_CANVAS_CAMERA}
+        dpr={LANDING_CANVAS_DPR}
+        gl={LANDING_CANVAS_GL}
       >
-        <color attach="background" args={["#0a0a0f"]} />
+        <color attach="background" args={[LANDING_BACKGROUND_COLOR]} />
         <ambientLight intensity={0.4} />
         <directionalLight position={[5, 5, 5]} intensity={0.3} />
         <pointLight position={[-3, 2, 2]} intensity={0.2} color="#4A9EFF" />
