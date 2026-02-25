@@ -1,4 +1,5 @@
 import { config } from "dotenv";
+import { GITHUB_API_BASE_URL } from "../util/constants";
 
 config();
 
@@ -10,7 +11,7 @@ export const createGithubIssue = async () => {
   const userName = process.env.GITHUB_USER_NAME;
   const repoName = process.env.GITHUB_REPO_NAME;
 
-  const url = `https://api.github.com/repos/${userName}/${repoName}/issues`;
+  const url = `${GITHUB_API_BASE_URL}/repos/${userName}/${repoName}/issues`;
 
   const data = {
     title: 'test Issue',
