@@ -1436,6 +1436,83 @@ async fn record_task_completion(
     Ok(task_completion_id)
 }
 
+fn validate_task_feedback_details(details: Option<&str>) -> ApiResult<()> {
+    let raw = match details {
+        Some(value) if !value.trim().is_empty() => value,
+        _ => return Ok(()),
+    };
+
+    let parsed: Value = match serde_json::from_str(raw) {
+        Ok(value) => value,
+        // Backward compatibility: legacy plain-text details are still accepted.
+        Err(_) => return Ok(()),
+    };
+    let Some(obj) = parsed.as_object() else {
+        return Ok(());
+    };
+
+    let has_feedback_fields = obj.contains_key("product_link")
+        || obj.contains_key("feedback_rating")
+        || obj.contains_key("feedback_tags")
+        || obj.contains_key("feedback_reason");
+
+    if !has_feedback_fields {
+        return Ok(());
+    }
+
+    let product_link = obj
+        .get("product_link")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| ApiError::validation("details.product_link is required"))?;
+    if !product_link.starts_with("http://") && !product_link.starts_with("https://") {
+        return Err(ApiError::validation(
+            "details.product_link must start with http:// or https://",
+        ));
+    }
+
+    let feedback_tags = obj
+        .get("feedback_tags")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| ApiError::validation("details.feedback_tags is required"))?;
+    if feedback_tags.len() < 2 {
+        return Err(ApiError::validation(
+            "details.feedback_tags must contain at least one tag",
+        ));
+    }
+
+    let feedback_reason = obj
+        .get("feedback_reason")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| ApiError::validation("details.feedback_reason is required"))?;
+    if feedback_reason.chars().count() < 6 {
+        return Err(ApiError::validation(
+            "details.feedback_reason must be at least 6 characters",
+        ));
+    }
+
+    let rating_opt: Option<u8> = match obj.get("feedback_rating") {
+        Some(Value::Number(n)) => n.as_u64().and_then(|v| u8::try_from(v).ok()),
+        Some(Value::String(s)) => s.trim().parse::<u8>().ok(),
+        _ => None,
+    };
+
+    let rating = rating_opt
+        .ok_or_else(|| ApiError::validation("details.feedback_rating must be an integer 1-5"))?;
+    if !(1..=5).contains(&rating) {
+        return Err(ApiError::validation(
+            "details.feedback_rating must be between 1 and 5",
+        ));
+    }
+
+    Ok(())
+}
+
 pub async fn gpt_complete_task(
     State(state): State<SharedState>,
     Path(campaign_id): Path<Uuid>,
@@ -1462,6 +1539,8 @@ pub async fn gpt_complete_task(
     if !campaign_exists {
         return Err(ApiError::not_found("campaign not found"));
     }
+
+    validate_task_feedback_details(payload.details.as_deref())?;
 
     let now = Utc::now();
     record_consents(&db, user_id, campaign_id, &payload.consent, now).await?;

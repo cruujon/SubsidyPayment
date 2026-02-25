@@ -587,6 +587,11 @@ paths:
                   type: string
                 details:
                   type: string
+                  description: >-
+                    JSON string payload for task evidence. For product feedback UI,
+                    include keys: product_link, feedback_rating (1-5), feedback_tags,
+                    feedback_reason.
+                  example: "{\"email\":\"you@example.com\",\"feedback_rating\":\"4\",\"feedback_tags\":\"Cost, Usability\",\"feedback_reason\":\"Onboarding copy is ambiguous; please add setup examples.\",\"product_link\":\"https://example.com/product\"}"
                 consent:
                   type: object
                   required:

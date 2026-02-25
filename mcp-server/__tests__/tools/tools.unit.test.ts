@@ -293,6 +293,81 @@ describe('MCP tools unit tests (task 9.1)', () => {
     ).toThrow();
   });
 
+  it('validates input schema (complete_task invalid feedback rating)', () => {
+    registerAndCaptureTools();
+    const { definition } = getRegistered('complete_task');
+
+    expect(() =>
+      definition.inputSchema.parse({
+        campaign_id: '2f6d2c0b-3c7a-4a0a-9a2e-6f2b6b7e8d90',
+        task_name: 'share_feedback',
+        consent: {
+          data_sharing_agreed: true,
+          purpose_acknowledged: true,
+          contact_permission: true,
+        },
+        feedback: {
+          product_link: 'https://example.com/product',
+          feedback_rating: 6,
+          feedback_tags: 'Cost',
+          feedback_reason: 'Need better onboarding copy.',
+        },
+      })
+    ).toThrow();
+  });
+
+  it('serializes complete_task feedback into details when details is omitted', async () => {
+    registerAndCaptureTools();
+    mocked.verifyToken.mockResolvedValue({
+      sub: 'auth0|1',
+      email: 'user@example.com',
+      scopes: ['tasks.write'],
+      token: 'token',
+    });
+    mocked.completeTask.mockResolvedValue({
+      task_completion_id: '7c9f8f6a-6f89-4e77-b2e1-bb8d58a5be35',
+      campaign_id: '2f6d2c0b-3c7a-4a0a-9a2e-6f2b6b7e8d90',
+      consent_recorded: true,
+      can_use_service: true,
+      message: 'ok',
+    });
+    mocked.getTaskDetails.mockResolvedValue({
+      required_task: 'share_feedback',
+      sponsor: 'Acme',
+      campaign_name: 'Acme Campaign',
+      subsidy_amount_cents: 120,
+    });
+
+    const { handler } = getRegistered('complete_task');
+    await handler(
+      {
+        campaign_id: '2f6d2c0b-3c7a-4a0a-9a2e-6f2b6b7e8d90',
+        task_name: 'share_feedback',
+        session_token: 'session-token',
+        consent: {
+          data_sharing_agreed: true,
+          purpose_acknowledged: true,
+          contact_permission: true,
+        },
+        feedback: {
+          product_link: 'https://example.com/product',
+          feedback_rating: 4,
+          feedback_tags: 'Cost, Usability',
+          feedback_reason: 'Onboarding copy is ambiguous; please add setup examples.',
+        },
+      },
+      { auth: { token: 'token' } }
+    );
+
+    expect(mocked.completeTask).toHaveBeenCalled();
+    const [, payload] = mocked.completeTask.mock.calls[0];
+    expect(typeof payload.details).toBe('string');
+    expect(payload.details).toContain('"product_link":"https://example.com/product"');
+    expect(payload.details).toContain('"feedback_rating":4');
+    expect(payload.details).toContain('"feedback_tags":"Cost, Usability"');
+    expect(payload.details).toContain('"feedback_reason":"Onboarding copy is ambiguous; please add setup examples."');
+  });
+
   it('returns 3-part response for weather success', async () => {
     registerAndCaptureTools();
     mocked.getWeather.mockResolvedValue({

@@ -286,6 +286,13 @@ export interface GptConsentInput {
   contact_permission: boolean;
 }
 
+export interface TaskFeedbackDetails {
+  product_link: string;
+  feedback_rating: number;
+  feedback_tags: string;
+  feedback_reason: string;
+}
+
 export interface CompleteTaskInput {
   campaign_id: string;
   session_token: string;
