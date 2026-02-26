@@ -11,32 +11,62 @@ const searchServicesInputSchema = z.object({
   category: z.string().optional(),
   max_budget_cents: z.number().int().nonnegative().optional(),
   intent: z.string().optional(),
+  campaign_id: z.string().optional(),
 });
 
-function buildNextActions(query?: string) {
-  const keyword = typeof query === 'string' && query.trim().length > 0 ? query.trim() : 'github';
+function buildNextActions(serviceKey?: string) {
+  const keyword = typeof serviceKey === 'string' && serviceKey.trim().length > 0 ? serviceKey.trim() : '';
+  if (!keyword) {
+    return [
+      {
+        action: 'Open guided flow',
+        prompt: 'Please run get_prompt_guide_flow with context_step=2.',
+        tool: 'get_prompt_guide_flow',
+      },
+    ];
+  }
   return [
     {
-      action: '候補サービスのタスクを見る',
+      action: 'Check tasks for a selected service',
       prompt: `Please run get_service_tasks with service_key=${keyword}.`,
       tool: 'get_service_tasks',
     },
   ];
 }
 
-function toSearchServicesResult(response: GptSearchResponse) {
+function pickRecommendedServiceKey(response: GptSearchResponse, input: SearchServicesParams): string | null {
+  const fromCandidate = response.candidate_services?.find((c) => c.service_key?.trim())?.service_key?.trim();
+  if (fromCandidate) return fromCandidate;
+
+  const fromCatalog = response.service_catalog?.find((c) => c.service_key?.trim())?.service_key?.trim();
+  if (fromCatalog) return fromCatalog;
+
+  const fromServiceCategory = response.services
+    .find((service) => service.service_type === 'campaign' && service.category.some((c) => c.trim().length > 0))
+    ?.category.find((c) => c.trim().length > 0)?.trim();
+  if (fromServiceCategory) return fromServiceCategory;
+
+  const fallback = input.q ?? input.category;
+  return typeof fallback === 'string' && fallback.trim().length > 0 ? fallback.trim() : null;
+}
+
+function toSearchServicesResult(response: GptSearchResponse, input: SearchServicesParams) {
   const services = response.services.filter((service) => service.service_type === 'campaign');
   const candidateServices = response.candidate_services ?? [];
   const serviceCatalog = response.service_catalog ?? [];
   const sponsorCatalog = response.sponsor_catalog ?? [];
   const totalCount = services.length;
+  const recommendedServiceKey = pickRecommendedServiceKey(response, input);
+  const nextActions = buildNextActions(recommendedServiceKey ?? undefined);
+  const recommendedNextPrompt = nextActions[0]?.prompt ?? 'Please run get_prompt_guide_flow with context_step=2.';
   const message =
     totalCount === 0
       ? 'No campaign-backed sponsored services found. Please create or activate a sponsor campaign first.'
-      : 'Interactive sponsored services list ready in the widget.';
+      : `Interactive sponsored services list ready in the widget. Next: ${recommendedNextPrompt}`;
 
   return {
     structuredContent: {
+      flow_step: '2',
       services,
       total_count: totalCount,
       candidate_services: candidateServices,
@@ -44,7 +74,9 @@ function toSearchServicesResult(response: GptSearchResponse) {
       sponsor_catalog: sponsorCatalog,
       applied_filters: response.applied_filters,
       available_categories: response.available_categories,
-      next_actions: buildNextActions(response.applied_filters?.keyword ?? response.applied_filters?.intent ?? ''),
+      recommended_service_key: recommendedServiceKey,
+      recommended_next_prompt: recommendedNextPrompt,
+      next_actions: nextActions,
     },
     content: [
       { type: 'text' as const, text: message },
@@ -89,7 +121,7 @@ export function registerSearchServicesTool(server: McpServer, config: BackendCon
     async (input: SearchServicesParams) => {
       try {
         const response = await client.searchServices(input);
-        return toSearchServicesResult(response);
+        return toSearchServicesResult(response, input);
       } catch (error) {
         if (error instanceof BackendClientError) {
           return {

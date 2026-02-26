@@ -11,11 +11,14 @@ const getUserStatusInputSchema = z.object({
   session_token: z.string().optional(),
 });
 
-function buildNextActions() {
+function buildNextActions(service?: string) {
+  const normalizedService = typeof service === 'string' && service.trim().length > 0 ? service.trim() : '';
   return [
     {
       action: '利用可能サービスを実行する',
-      prompt: 'Please run run_service with service and input.',
+      prompt: normalizedService
+        ? `Please run run_service with service=${normalizedService} and input="<your request>".`
+        : 'Please run run_service with service and input.',
       tool: 'run_service',
     },
     {
@@ -24,6 +27,10 @@ function buildNextActions() {
       tool: 'get_prompt_guide_flow',
     },
   ];
+}
+
+function buildRecommendedNextPrompt(service?: string): string {
+  return buildNextActions(service)[0]?.prompt ?? 'Please run get_prompt_guide_flow.';
 }
 
 function unauthorizedSessionResponse(publicUrl: string) {
@@ -100,17 +107,23 @@ export function registerGetUserStatusTool(server: McpServer, config: BackendConf
         }
 
         const response = await client.getUserStatus(sessionToken);
+        const firstReadyService = response.available_services.find((svc) => svc.ready)?.service
+          ?? response.available_services[0]?.service
+          ?? null;
+        const recommendedNextPrompt = buildRecommendedNextPrompt(firstReadyService ?? undefined);
 
         return {
           structuredContent: {
+            flow_step: '6',
             user_id: response.user_id,
             email: response.email,
             completed_tasks: response.completed_tasks,
             available_services: response.available_services,
-            next_actions: buildNextActions(),
+            recommended_next_prompt: recommendedNextPrompt,
+            next_actions: buildNextActions(firstReadyService ?? undefined),
           },
           content: [
-            { type: 'text' as const, text: response.message },
+            { type: 'text' as const, text: `${response.message} Next: ${recommendedNextPrompt}` },
           ],
           _meta: {
             'openai/outputTemplate': 'ui://widget/user-dashboard.html',

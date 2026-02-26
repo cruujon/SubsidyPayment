@@ -7,6 +7,7 @@ const mocked = vi.hoisted(() => ({
   authenticateUser: vi.fn(),
   getTaskDetails: vi.fn(),
   initZkpassportVerification: vi.fn(),
+  getZkpassportSession: vi.fn(),
   completeTask: vi.fn(),
   runService: vi.fn(),
   runProxyService: vi.fn(),
@@ -40,6 +41,7 @@ vi.mock('../../src/backend-client.ts', () => {
     authenticateUser = mocked.authenticateUser;
     getTaskDetails = mocked.getTaskDetails;
     initZkpassportVerification = mocked.initZkpassportVerification;
+    getZkpassportSession = mocked.getZkpassportSession;
     completeTask = mocked.completeTask;
     runService = mocked.runService;
     runProxyService = mocked.runProxyService;
@@ -138,6 +140,7 @@ describe('MCP tools unit tests (task 9.1)', () => {
     mocked.authenticateUser.mockReset();
     mocked.getTaskDetails.mockReset();
     mocked.initZkpassportVerification.mockReset();
+    mocked.getZkpassportSession.mockReset();
     mocked.completeTask.mockReset();
     mocked.runService.mockReset();
     mocked.runProxyService.mockReset();
@@ -252,6 +255,72 @@ describe('MCP tools unit tests (task 9.1)', () => {
     expect(result.content.find((c: any) => c.type === 'resource')).toBeUndefined();
     expect(result.contents).toBeUndefined();
     expect(result._meta.session_token).toBe('session-token');
+  });
+
+  it('starts zkPassport verification and returns session info for task flow', async () => {
+    registerAndCaptureTools();
+    mocked.verifyToken.mockResolvedValue({
+      sub: 'auth0|1',
+      email: 'user@example.com',
+      scopes: ['tasks.write'],
+      token: 'token',
+    });
+
+    mocked.initZkpassportVerification.mockResolvedValue({
+      verification_id: '11111111-1111-1111-1111-111111111111',
+      verification_token: '22222222-2222-2222-2222-222222222222',
+      campaign_id: '33333333-3333-3333-3333-333333333333',
+      verification_url: 'https://backend.example.com/verify/zkpassport?token=abc',
+      expires_at: '2026-01-01T00:00:00Z',
+      message: 'Open the verification page and complete human proof.',
+    });
+
+    mocked.getZkpassportSession.mockResolvedValue({
+      verification_id: '11111111-1111-1111-1111-111111111111',
+      campaign_id: '33333333-3333-3333-3333-333333333333',
+      required_task: 'zkpassport_age_country',
+      min_age: 18,
+      allowed_country_labels: ['USA'],
+      scope: 'snapfuel-gpt-age-country-v1',
+      status: 'verified',
+      expires_at: '2026-01-01T00:00:00Z',
+      message: 'Verification already completed.',
+    });
+
+    const input = {
+      campaign_id: '33333333-3333-3333-3333-333333333333',
+      session_token: 'session-token',
+      consent: {
+        data_sharing_agreed: true,
+        purpose_acknowledged: true,
+        contact_permission: false,
+      },
+    };
+
+    const { handler } = getRegistered('start_zkpassport_verification');
+    const result = await handler(input, { auth: { token: 'token' } });
+
+    expect(mocked.verifyToken).toHaveBeenCalledWith('token');
+    expect(mocked.initZkpassportVerification).toHaveBeenCalledWith(input.campaign_id, {
+      campaign_id: input.campaign_id,
+      session_token: 'session-token',
+      consent: input.consent,
+    });
+    expect(mocked.getZkpassportSession).toHaveBeenCalledWith(
+      '22222222-2222-2222-2222-222222222222'
+    );
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      verification_id: '11111111-1111-1111-1111-111111111111',
+      verification_token: '22222222-2222-2222-2222-222222222222',
+      campaign_id: '33333333-3333-3333-3333-333333333333',
+      verification_url: 'https://backend.example.com/verify/zkpassport?token=abc',
+      session_status: 'verified',
+      zkpassport_install_url: 'https://zkpassport.id/',
+    });
+    expect(result._meta.full_response).toMatchObject({
+      verification_id: '11111111-1111-1111-1111-111111111111',
+    });
   });
 
   it('keeps run_service output in _meta and not in structuredContent', async () => {

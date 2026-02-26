@@ -43,6 +43,13 @@ function buildNextActions(serviceKey: string, campaignId?: string) {
   ];
 }
 
+function buildRecommendedNextPrompt(serviceKey: string, campaignId?: string): string {
+  if (campaignId) {
+    return `Please run get_task_details with campaign_id=${campaignId}.`;
+  }
+  return `Please run search_services with q=${serviceKey} to search again.`;
+}
+
 function unauthorizedSessionResponse(publicUrl: string) {
   return {
     content: [{ type: 'text' as const, text: 'Login is required to perform this action. 次は「authenticate_user を実行してください」と入力してください。' }],
@@ -213,20 +220,23 @@ export function registerGetServiceTasksTool(server: McpServer, config: BackendCo
         const result = buildTasksFromSearchResponse(input.service_key, searchResponse);
 
         if (!result || result.tasks.length === 0) {
+          const recommendedNextPrompt = buildRecommendedNextPrompt(input.service_key);
           return {
             structuredContent: {
+              flow_step: '3',
               service_key: input.service_key,
               display_name: input.service_key,
               tasks: [],
               task_count: 0,
               sponsor_names: [],
               total_subsidy_cents: 0,
+              recommended_next_prompt: recommendedNextPrompt,
               next_actions: buildNextActions(input.service_key),
             },
             content: [
               {
                 type: 'text' as const,
-                text: `No subsidized tasks found for service "${input.service_key}".`,
+                text: `No subsidized tasks found for service "${input.service_key}". Next: ${recommendedNextPrompt}`,
               },
             ],
             _meta: {
@@ -239,20 +249,23 @@ export function registerGetServiceTasksTool(server: McpServer, config: BackendCo
           `Found ${result.tasks.length} subsidized task(s) for ${result.display_name}` +
           ` from ${result.sponsor_names.length} sponsor(s).` +
           ` Total available subsidy: $${(result.total_subsidy_cents / 100).toFixed(2)}.`;
+        const recommendedNextPrompt = buildRecommendedNextPrompt(input.service_key, result.tasks[0]?.campaign_id);
 
 
         return {
           structuredContent: {
+            flow_step: '3',
             service_key: input.service_key,
             display_name: result.display_name,
             tasks: result.tasks,
             task_count: result.tasks.length,
             sponsor_names: result.sponsor_names,
             total_subsidy_cents: result.total_subsidy_cents,
+            recommended_next_prompt: recommendedNextPrompt,
             next_actions: buildNextActions(input.service_key, result.tasks[0]?.campaign_id),
           },
           content: [
-            { type: 'text' as const, text: message },
+            { type: 'text' as const, text: `${message} Next: ${recommendedNextPrompt}` },
           ],
           _meta: {
             'openai/outputTemplate': 'ui://widget/service-tasks.html',

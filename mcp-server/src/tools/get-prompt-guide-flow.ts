@@ -62,15 +62,16 @@ function buildFlow(step: FlowStep, service?: string, campaignId?: string): FlowD
     case '1':
       return {
         step,
-        goal: 'キャンペーンを作成して、以降のタスク導線を有効化する。',
-        recommendedNextPrompt: `create_campaign_from_goal を使って ${resolvedService} 向けキャンペーンを作成してください。`,
+        goal: 'Create a campaign so the guided task flow can proceed with a real sponsor offer.',
+        recommendedNextPrompt:
+          `Please run create_campaign_from_goal with purpose="Validate ${resolvedService} flow", sponsor="SnapFuel Demo", target_roles=["developer"], target_tools=["${resolvedService}"], required_task="product_feedback", subsidy_per_call_cents=5000, budget_cents=50000.`,
         copyPastePrompts: [
-          `create_campaign_from_goal を purpose=GitHub Issue作成導線の検証, sponsor=SnapFuel Demo, target_roles=[\"developer\"], target_tools=[\"${resolvedService}\"], budget_cents=50000 で実行してください。`,
-          '作成後に campaign_id と selected_service_key を1行で報告してください。',
+          `Please run create_campaign_from_goal with purpose="Validate ${resolvedService} flow", sponsor="SnapFuel Demo", target_roles=["developer"], target_tools=["${resolvedService}"], required_task="product_feedback", subsidy_per_call_cents=5000, budget_cents=50000.`,
+          'After creation, report campaign_id and selected_service_key in one line.',
         ],
         nextActions: [
           {
-            action: 'キャンペーン作成',
+            action: 'Create campaign',
             prompt: `Please run create_campaign_from_goal for service=${resolvedService}.`,
             tool: 'create_campaign_from_goal',
           },
@@ -79,101 +80,108 @@ function buildFlow(step: FlowStep, service?: string, campaignId?: string): FlowD
     case '2':
       return {
         step,
-        goal: '候補サービスを比較して、次に進む1件を選ぶ。',
-        recommendedNextPrompt: `サービス候補から ${resolvedService} 系を1件選び、次に実行する get_service_tasks の入力を1行で示してください。`,
+        goal: 'Search sponsored services and choose one service_key to inspect tasks.',
+        recommendedNextPrompt:
+          `Please run search_services with q=${resolvedService}, intent="I want to use ${resolvedService}", max_budget_cents=50000${resolvedCampaign !== '<campaign_id>' ? `, campaign_id=${resolvedCampaign}` : ''}.`,
         copyPastePrompts: [
-          `search_services を使って ${resolvedService} の候補を再表示してください。`,
-          `候補の中から1件選び、選定理由を1行で説明してください。`,
+          `Please run search_services with q=${resolvedService}, intent="I want to use ${resolvedService}", max_budget_cents=50000${resolvedCampaign !== '<campaign_id>' ? `, campaign_id=${resolvedCampaign}` : ''}.`,
+          'Pick one service_key from the results and report it in one line.',
         ],
         nextActions: [
           {
-            action: '選んだサービスのタスクを確認',
-            prompt: `Please run get_service_tasks with service_key=${resolvedService}.`,
-            tool: 'get_service_tasks',
+            action: 'Search services',
+            prompt:
+              `Please run search_services with q=${resolvedService}, max_budget_cents=50000${resolvedCampaign !== '<campaign_id>' ? `, campaign_id=${resolvedCampaign}` : ''}.`,
+            tool: 'search_services',
           },
         ],
       };
     case '3':
       return {
         step,
-        goal: '対象キャンペーンの必須タスク詳細を確定する。',
-        recommendedNextPrompt: `選択した campaign_id で get_task_details を実行してください。campaign_id は ${resolvedCampaign} です。`,
+        goal: 'Check subsidized tasks for the selected service_key and identify the campaign_id.',
+        recommendedNextPrompt: `Please run get_service_tasks with service_key=${resolvedService}.`,
         copyPastePrompts: [
-          `get_task_details を campaign_id=${resolvedCampaign} で実行してください。`,
-          '返ってきた required_task と task_input_format の必須項目だけを箇条書きで出してください。',
+          `Please run get_service_tasks with service_key=${resolvedService}.`,
+          'Report the selected campaign_id from the returned tasks list.',
         ],
         nextActions: [
           {
-            action: 'タスク入力要件を確認',
-            prompt: `Please rerun get_task_details with campaign_id=${resolvedCampaign}.`,
-            tool: 'get_task_details',
+            action: 'Check service tasks',
+            prompt: `Please run get_service_tasks with service_key=${resolvedService}.`,
+            tool: 'get_service_tasks',
           },
         ],
       };
     case '4':
       return {
         step,
-        goal: 'テンプレに沿って回答し、タスク完了を登録する。',
-        recommendedNextPrompt:
-          'complete_task を実行してください。consent 3項目を true/true/false で設定し、details には回答テンプレをそのまま入れてください。',
+        goal: 'Load exact task requirements for the chosen campaign before submitting completion.',
+        recommendedNextPrompt: `Please run get_task_details with campaign_id=${resolvedCampaign}.`,
         copyPastePrompts: [
-          'complete_task 実行前に、送信する payload を表示してください。',
-          'complete_task 実行後に can_use_service と task_completion_id を1行で要約してください。',
+          `Please run get_task_details with campaign_id=${resolvedCampaign}.`,
+          'Return required_task and task_input_format required fields only.',
         ],
         nextActions: [
           {
-            action: 'タスク完了を登録',
-            prompt: 'Please run complete_task to mark the task as completed.',
-            tool: 'complete_task',
+            action: 'Get task details',
+            prompt: `Please run get_task_details with campaign_id=${resolvedCampaign}.`,
+            tool: 'get_task_details',
           },
         ],
       };
     case '5':
       return {
         step,
-        goal: '完了後に解放されたサービス実行可否を確認する。',
-        recommendedNextPrompt: `get_user_status を実行して、${resolvedService} が実行可能か確認してください。`,
+        goal: 'Submit task completion with consent so sponsor coverage can unlock.',
+        recommendedNextPrompt:
+          `Please run complete_task with campaign_id=${resolvedCampaign}, task_name=product_feedback, consent={"data_sharing_agreed":true,"purpose_acknowledged":true,"contact_permission":false}, and details="<follow task_input_format>".`,
         copyPastePrompts: [
-          'get_user_status を実行して completed_tasks と available_services を表示してください。',
-          `次に run_service へ渡す service 名を1つだけ確定してください（候補: ${resolvedService}）。`,
+          `Please run complete_task with campaign_id=${resolvedCampaign}, task_name=product_feedback, consent={"data_sharing_agreed":true,"purpose_acknowledged":true,"contact_permission":false}.`,
+          'After completion, report can_use_service and task_completion_id in one line.',
         ],
         nextActions: [
           {
-            action: '解放状態を確認',
-            prompt: 'Please run get_user_status.',
-            tool: 'get_user_status',
+            action: 'Complete task',
+            prompt: `Please run complete_task with campaign_id=${resolvedCampaign}.`,
+            tool: 'complete_task',
           },
         ],
       };
     case '6':
       return {
         step,
-        goal: 'サービスを実行し、結果を確認する。',
-        recommendedNextPrompt: `run_service を実行してください。service=${resolvedService}、input は実行したい具体的な依頼文にしてください。`,
+        goal: 'Confirm run readiness and identify the exact runnable service name.',
+        recommendedNextPrompt: 'Please run get_user_status.',
         copyPastePrompts: [
-          `run_service を service=${resolvedService} で実行してください。`,
-          '結果の payment_mode / sponsored_by / output要約 を3行で出してください。',
+          'Please run get_user_status.',
+          `Confirm whether ${resolvedService} is listed in available_services.`,
         ],
         nextActions: [
           {
-            action: 'サービス実行',
-            prompt: `Please run run_service with service=${resolvedService}.`,
-            tool: 'run_service',
+            action: 'Check user status',
+            prompt: 'Please run get_user_status.',
+            tool: 'get_user_status',
           },
         ],
       };
     case '7':
       return {
         step,
-        goal: '最終確認として実行結果と次の推奨操作を明示する。',
-        recommendedNextPrompt: '実行結果の要約と、次に試せる1つの操作を表示してください。',
+        goal: 'Run the service and return the execution/payment result.',
+        recommendedNextPrompt: `Please run run_service with service=${resolvedService} and input="<your request>".`,
         copyPastePrompts: [
-          'run_service の最終結果を 3 行で要約してください。',
-          '次に実行できる操作を 1 つだけ提示してください。',
+          `Please run run_service with service=${resolvedService} and input="Create a GitHub issue with clear reproduction steps."`,
+          'Return payment_mode, sponsored_by, and a short output summary.',
         ],
         nextActions: [
           {
-            action: '利用履歴の確認',
+            action: 'Run service',
+            prompt: `Please run run_service with service=${resolvedService}.`,
+            tool: 'run_service',
+          },
+          {
+            action: 'Check latest usage record',
             prompt: 'Please run user_record and summarize the latest execution.',
             tool: 'user_record',
           },
@@ -183,18 +191,18 @@ function buildFlow(step: FlowStep, service?: string, campaignId?: string): FlowD
     default:
       return {
         step: '0',
-        goal: '迷わないよう、最初に固定ガイドで開始する。',
-        recommendedNextPrompt: `create_campaign_from_goal で ${resolvedService} 向けキャンペーンを作成し、その後に search_services を実行してください。`,
+        goal: 'Start with guided flow setup so the next step is deterministic.',
+        recommendedNextPrompt: `Please run create_campaign_from_goal for ${resolvedService} first, then call get_prompt_guide_flow with context_step=2.`,
         copyPastePrompts: [
-          `create_campaign_from_goal を purpose=GitHub Issue作成導線の検証, sponsor=SnapFuel Demo, target_roles=[\"developer\"], target_tools=[\"${resolvedService}\"], budget_cents=50000 で実行してください。`,
-          `次に search_services を q=${resolvedService}, intent=GitHub Issueを作成したい, max_budget_cents=50000 で実行してください。`,
-          '迷ったら get_prompt_guide_flow を context_step=1 で再実行してください。',
+          `Please run get_prompt_guide_flow with context_step=1 and service=${resolvedService}.`,
+          `If you already have a campaign_id, rerun get_prompt_guide_flow with context_step=2, service=${resolvedService}, campaign_id=${resolvedCampaign}.`,
+          'When stuck at any step, rerun get_prompt_guide_flow with the current context_step.',
         ],
         nextActions: [
           {
-            action: 'キャンペーンを作成',
-            prompt: `Please run create_campaign_from_goal for ${resolvedService}.`,
-            tool: 'create_campaign_from_goal',
+            action: 'Open step guide for campaign creation',
+            prompt: `Please run get_prompt_guide_flow with context_step=1 and service=${resolvedService}.`,
+            tool: 'get_prompt_guide_flow',
           },
         ],
       };
@@ -236,7 +244,7 @@ export function registerGetPromptGuideFlowTool(server: McpServer, _config: Backe
         content: [
           {
             type: 'text' as const,
-            text: `Step ${flow.step}: ${flow.goal} 次はこれを入力してください: ${flow.recommendedNextPrompt}`,
+            text: `Step ${flow.step}: ${flow.goal} Next prompt: ${flow.recommendedNextPrompt}`,
           },
         ],
       };

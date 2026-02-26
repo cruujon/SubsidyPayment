@@ -265,6 +265,7 @@ export interface SearchServicesParams {
   category?: string;
   max_budget_cents?: number;
   intent?: string;
+  campaign_id?: string;
   session_token?: string;
 }
 
