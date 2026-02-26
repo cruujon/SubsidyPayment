@@ -10,8 +10,6 @@ export function createServer(config: BackendConfig): McpServer {
     version: '1.0.0',
     description:
       'Guided 7-step MCP flow for campaign -> task -> run. Always show one explicit next prompt and prefer get_prompt_guide_flow when the user is unsure.',
-    instructions:
-      'Use a guided tool-chaining style. After each tool call, read structuredContent.recommended_next_prompt and structuredContent.next_actions, then suggest or execute exactly one next step. If the user is unsure/stuck or a tool errors, call get_prompt_guide_flow with context_step, service, and campaign_id when available. Do not invent tool names or parameters.',
   });
 
   registerAllTools(server, config);
