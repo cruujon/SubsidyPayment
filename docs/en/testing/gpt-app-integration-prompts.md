@@ -272,20 +272,10 @@ I want to submit product feedback. Please run complete_task with:
 - campaign_id: <campaign_id>
 - task_name: product_feedback
 - details: {
-  "rating": 4,
-  "summary": "Overall the flow was smooth, but I still got confused in the first-time guidance.",
-  "what_worked": [
-    "Following the guide got me to the target action",
-    "The run_service path was easy to understand"
-  ],
-  "issues": [
-    "Campaign creation errors are still too abstract",
-    "The next prompt location is not obvious on some screens"
-  ],
-  "improvements": [
-    "Always show one retry prompt when an error happens",
-    "Keep a fixed 'completion criteria' block on each step"
-  ]
+  "product_link": "https://github.com/octo-org/subsidy-payment",
+  "feedback_rating": 4,
+  "feedback_tags": "Usability, Guidance",
+  "feedback_reason": "The overall flow was smooth, but in first-time use the next prompt was not always obvious."
 }
 - consent: {"data_sharing_agreed": true, "purpose_acknowledged": true, "contact_permission": false}
 ```

@@ -28,6 +28,65 @@ const completeTaskInputSchema = z.object({
   }),
 });
 
+function normalizeFeedbackDetails(taskName: string, details?: string): string | undefined {
+  if (!details || !taskName.toLowerCase().includes('feedback')) {
+    return details;
+  }
+
+  let parsed: Record<string, unknown>;
+  try {
+    const value = JSON.parse(details);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return details;
+    }
+    parsed = value as Record<string, unknown>;
+  } catch {
+    return details;
+  }
+
+  const next = { ...parsed };
+  const existingRating = next.feedback_rating;
+  const ratingFromAlias = next.rating;
+  if (
+    (existingRating === undefined || existingRating === null || existingRating === '') &&
+    (typeof ratingFromAlias === 'number' || typeof ratingFromAlias === 'string')
+  ) {
+    next.feedback_rating = ratingFromAlias;
+  }
+
+  const existingReason = typeof next.feedback_reason === 'string' ? next.feedback_reason.trim() : '';
+  if (!existingReason) {
+    const summary = typeof next.summary === 'string' ? next.summary.trim() : '';
+    const issues = Array.isArray(next.issues)
+      ? next.issues.map((v) => String(v).trim()).filter(Boolean).join(' / ')
+      : '';
+    const fallbackReason = summary || issues;
+    if (fallbackReason) {
+      next.feedback_reason = fallbackReason;
+    }
+  }
+
+  const existingTags = typeof next.feedback_tags === 'string' ? next.feedback_tags.trim() : '';
+  if (!existingTags) {
+    const fallbackTags = Array.isArray(next.feedback_tags)
+      ? next.feedback_tags.map((v) => String(v).trim()).filter(Boolean).join(', ')
+      : '';
+    next.feedback_tags = fallbackTags || 'Usability, Features';
+  }
+
+  const existingLink = typeof next.product_link === 'string' ? next.product_link.trim() : '';
+  if (!existingLink) {
+    const githubRepo = typeof next.github_repo === 'string' ? next.github_repo.trim() : '';
+    if (/^[^/\s]+\/[^/\s]+$/.test(githubRepo)) {
+      next.product_link = `https://github.com/${githubRepo}`;
+    } else {
+      next.product_link = 'https://example.com/product';
+    }
+  }
+
+  return JSON.stringify(next);
+}
+
 function buildNextActions() {
   return [
     {
@@ -116,16 +175,18 @@ export function registerCompleteTaskTool(server: McpServer, config: BackendConfi
           campaign_id: input.campaign_id,
           session_token: sessionToken,
           task_name: input.task_name,
-          details:
+          details: normalizeFeedbackDetails(
+            input.task_name,
             input.details ??
-            (input.feedback
-              ? JSON.stringify({
-                  product_link: input.feedback.product_link,
-                  feedback_rating: input.feedback.feedback_rating,
-                  feedback_tags: input.feedback.feedback_tags,
-                  feedback_reason: input.feedback.feedback_reason,
-                })
-              : undefined),
+              (input.feedback
+                ? JSON.stringify({
+                    product_link: input.feedback.product_link,
+                    feedback_rating: input.feedback.feedback_rating,
+                    feedback_tags: input.feedback.feedback_tags,
+                    feedback_reason: input.feedback.feedback_reason,
+                  })
+                : undefined)
+          ),
           consent: input.consent,
         };
 

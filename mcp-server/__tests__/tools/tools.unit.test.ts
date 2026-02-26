@@ -369,6 +369,56 @@ describe('MCP tools unit tests (task 9.1)', () => {
     expect(payload.details).toContain('"feedback_reason":"Onboarding copy is ambiguous; please add setup examples."');
   });
 
+  it('normalizes rating aliases in complete_task details for feedback tasks', async () => {
+    registerAndCaptureTools();
+    mocked.verifyToken.mockResolvedValue({
+      sub: 'auth0|1',
+      email: 'user@example.com',
+      scopes: ['tasks.write'],
+      token: 'token',
+    });
+    mocked.completeTask.mockResolvedValue({
+      task_completion_id: '7c9f8f6a-6f89-4e77-b2e1-bb8d58a5be35',
+      campaign_id: '2f6d2c0b-3c7a-4a0a-9a2e-6f2b6b7e8d90',
+      consent_recorded: true,
+      can_use_service: true,
+      message: 'ok',
+    });
+    mocked.getTaskDetails.mockResolvedValue({
+      required_task: 'product_feedback',
+      sponsor: 'Acme',
+      campaign_name: 'Acme Campaign',
+      subsidy_amount_cents: 120,
+    });
+
+    const { handler } = getRegistered('complete_task');
+    await handler(
+      {
+        campaign_id: '2f6d2c0b-3c7a-4a0a-9a2e-6f2b6b7e8d90',
+        task_name: 'product_feedback',
+        session_token: 'session-token',
+        details: JSON.stringify({
+          rating: 5,
+          summary: 'Great flow, but first-time guidance can still be clearer.',
+          github_repo: 'octo-org/subsidy-payment',
+        }),
+        consent: {
+          data_sharing_agreed: true,
+          purpose_acknowledged: true,
+          contact_permission: true,
+        },
+      },
+      { auth: { token: 'token' } }
+    );
+
+    const [, payload] = mocked.completeTask.mock.calls.at(-1);
+    expect(typeof payload.details).toBe('string');
+    expect(payload.details).toContain('"feedback_rating":5');
+    expect(payload.details).toContain('"feedback_reason":"Great flow, but first-time guidance can still be clearer."');
+    expect(payload.details).toContain('"feedback_tags":"Usability, Features"');
+    expect(payload.details).toContain('"product_link":"https://github.com/octo-org/subsidy-payment"');
+  });
+
   it('returns 3-part response for weather success', async () => {
     registerAndCaptureTools();
     mocked.getWeather.mockResolvedValue({
