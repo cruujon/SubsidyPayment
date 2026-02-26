@@ -17,6 +17,33 @@ import type {
 } from "./utils/types";
 import logoImage from "/logo.jpg";
 
+const TOOL_LABEL_ALIASES: Record<string, string> = {
+  coingecko: "CoinGecko",
+  coincap: "CoinCap",
+  coinbase: "Coinbase",
+  binance: "Binance",
+  kraken: "Kraken",
+  openai: "OpenAI",
+  supabase: "Supabase",
+  notion: "Notion",
+  figma: "Figma",
+  github: "GitHub"
+};
+
+function formatToolDisplayName(label: string): string {
+  const normalized = label.trim().toLowerCase();
+  if (!normalized) return label;
+  if (TOOL_LABEL_ALIASES[normalized]) {
+    return TOOL_LABEL_ALIASES[normalized];
+  }
+
+  return normalized
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 /**
  * App Component
  * @returns 
@@ -579,13 +606,16 @@ function App() {
 
     const toTopRows = (map: Map<string, number>, limit = 6) =>
       Array.from(map.entries())
-        .sort((a, b) => b[1] - a[1])
+        .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]))
         .slice(0, limit)
         .map(([label, value]) => ({ label, value }));
 
     const topRegions = toTopRows(regionMap, 5);
     const topRoles = toTopRows(roleMap, 6);
     const topTools = toTopRows(toolMap, 8);
+    const topToolMaxCount = topTools.reduce((max, entry) => Math.max(max, entry.value), 0);
+    const topToolsAllTied = topTools.length > 1 && topToolMaxCount > 0 &&
+      topTools.every((entry) => entry.value === topTools[0].value);
 
     const totalToolsAssigned = scopedProfiles.reduce((acc, profile) => acc + profile.tools_used.length, 0);
     const avgToolsPerUser = scopedProfiles.length > 0 ? totalToolsAssigned / scopedProfiles.length : 0;
@@ -603,6 +633,8 @@ function App() {
       topRegions,
       topRoles,
       topTools,
+      topToolMaxCount,
+      topToolsAllTied,
       avgToolsPerUser,
       devRoleShare
     };
@@ -2189,19 +2221,38 @@ function App() {
                   <div className="card full-width">
                     <div className="card-header"><div className="card-title"><h3>Most Used Tools by Users</h3></div></div>
                     <div className="card-content">
+                      {userDashboardStats.topToolsAllTied && userDashboardStats.topTools.length > 1 && (
+                        <div className="ranking-hint">
+                          Current sample is heavily tied. Bars show relative rank (all equal), and labels show actual profile share.
+                        </div>
+                      )}
                       {userDashboardStats.topTools.map((entry, index) => (
-                        <div key={`${entry.label}-${index}`} className="ranking-item">
+                        <div key={`${entry.label}-${index}`} className="ranking-item ranking-item-tool">
                           <span className="ranking-number">{index + 1}</span>
-                          <span className="ranking-name">{entry.label}</span>
+                          <div className="ranking-label-group">
+                            <span className="ranking-name">{formatToolDisplayName(entry.label)}</span>
+                            <span className="ranking-meta">
+                              {entry.value} user{entry.value === 1 ? "" : "s"} ·{" "}
+                              {userDashboardStats.scopedProfilesCount > 0
+                                ? ((entry.value / userDashboardStats.scopedProfilesCount) * 100).toFixed(0)
+                                : "0"}
+                              % of profiles
+                            </span>
+                          </div>
                           <div className="ranking-bar-bg">
                             <div
                               className="ranking-bar-fill"
                               style={{
-                                width: `${userDashboardStats.scopedProfilesCount > 0 ? (entry.value / userDashboardStats.scopedProfilesCount) * 100 : 0}%`
+                                width: `${Math.max(
+                                  entry.value > 0 ? 10 : 0,
+                                  userDashboardStats.topToolMaxCount > 0
+                                    ? (entry.value / userDashboardStats.topToolMaxCount) * 100
+                                    : 0
+                                )}%`
                               }}
                             ></div>
                           </div>
-                          <span className="ranking-pct">{entry.value}</span>
+                          <span className="ranking-pct">{entry.value}x</span>
                         </div>
                       ))}
                       {userDashboardStats.topTools.length === 0 && (
