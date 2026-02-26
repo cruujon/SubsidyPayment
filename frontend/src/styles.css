@@ -1843,6 +1843,24 @@ td {
   min-width: 110px;
 }
 
+.ranking-label-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 140px;
+  flex: 0 1 240px;
+}
+
+.ranking-item-tool .ranking-name {
+  min-width: 0;
+}
+
+.ranking-meta {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 1.2;
+}
+
 .ranking-bar-bg {
   flex: 1;
   height: 10px;
@@ -1865,6 +1883,17 @@ td {
   color: var(--text-primary);
   min-width: 50px;
   text-align: right;
+}
+
+.ranking-hint {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(74, 158, 255, 0.08);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 /* Service Dropdown (multi-select) */
@@ -3161,7 +3190,8 @@ input {
 [data-theme="light"] .metric-card-sub,
 [data-theme="light"] .inner-box-detail,
 [data-theme="light"] .task-item-label,
-[data-theme="light"] .ranking-name {
+[data-theme="light"] .ranking-name,
+[data-theme="light"] .ranking-meta {
   color: var(--text-secondary);
 }
 [data-theme="light"] .data-source-banner {
@@ -3787,6 +3817,11 @@ input {
   .ranking-item {
     flex-wrap: wrap;
     gap: 8px;
+  }
+
+  .ranking-label-group {
+    min-width: 0;
+    flex: 1 1 160px;
   }
 
   .ranking-name {
