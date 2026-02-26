@@ -154,8 +154,8 @@ function buildStructuredContent(
     campaign: response.campaign,
     frontend_dashboard_url: frontendDashboardUrl,
     frontend_campaign_url: frontendCampaignUrl,
-    backend_campaign_url: response.campaign_url,
-    backend_dashboard_api_url: response.dashboard_url,
+    backend_campaign_url: frontendCampaignUrl,
+    backend_dashboard_api_url: frontendDashboardUrl,
     selected_service_key: selection.service_key,
     selected_offer: selection.offer,
     selected_services: searchResponse.candidate_services ?? searchResponse.services,
@@ -299,6 +299,7 @@ export function registerCreateCampaignFromGoalTool(server: McpServer, config: Ba
 
         const response = await client.createCampaign(request);
         const frontendDashboardUrl = buildFrontendDashboardUrl(config.frontendUrl, response.campaign.id);
+        const frontendCampaignUrl = buildFrontendCampaignUrl(config.frontendUrl, response.campaign.id);
         return {
           structuredContent: buildStructuredContent(
             config,
@@ -327,7 +328,11 @@ export function registerCreateCampaignFromGoalTool(server: McpServer, config: Ba
             },
           ],
           _meta: {
-            full_response: response,
+            full_response: {
+              ...response,
+              campaign_url: frontendCampaignUrl,
+              dashboard_url: frontendDashboardUrl,
+            },
             search_response: searchResponse,
           },
         };
