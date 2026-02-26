@@ -1,19 +1,19 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { LandingBackground3D } from "./components/LandingBackground3D";
 import {
-  KPI_OPTIONS,
-  defaultCampaignForm
+    KPI_OPTIONS,
+    defaultCampaignForm
 } from "./utils/contants";
 import { formatDuration, parseAppDeepLink, percentile, splitCsv, taskCategoryFromText } from "./utils/helpers";
 import type {
-  AppView,
-  Campaign,
-  CampaignForm,
-  CreatorSummary,
-  PaymentRequired,
-  Profile,
-  SponsorDashboardData,
-  SponsoredApi
+    AppView,
+    Campaign,
+    CampaignForm,
+    CreatorSummary,
+    PaymentRequired,
+    Profile,
+    SponsorDashboardData,
+    SponsoredApi
 } from "./utils/types";
 import logoImage from "/logo.jpg";
 
@@ -60,7 +60,7 @@ function App() {
   const [dashboardMode, setDashboardMode] = useState<"general" | "user">("general");
   const [dataWarnings, setDataWarnings] = useState<string[]>([]);
   const [dashboardDeepLinkCampaignId, setDashboardDeepLinkCampaignId] = useState<string | null>(initialDeepLink.campaignId);
-  const [highlightedCampaignId] = useState<string | null>(initialDeepLink.campaignId);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(initialDeepLink.campaignId);
   const [currentUserEmail, setCurrentUserEmail] = useState(() => {
     return localStorage.getItem("currentUserEmail") || "";
   });
@@ -374,6 +374,31 @@ function App() {
     setCurrentView("landing");
   };
 
+  const syncDashboardQuery = (campaignId: string | null) => {
+    const params = new URLSearchParams(window.location.search);
+    params.set("view", "dashboard");
+    if (campaignId) {
+      params.set("campaign_id", campaignId);
+    } else {
+      params.delete("campaign_id");
+    }
+    const query = params.toString();
+    const nextUrl = query.length > 0 ? `${window.location.pathname}?${query}` : window.location.pathname;
+    window.history.replaceState(null, "", nextUrl);
+  };
+
+  const openCampaignDetail = (campaignId: string) => {
+    setCurrentView("dashboard");
+    setDashboardMode("general");
+    setSelectedCampaignId(campaignId);
+    syncDashboardQuery(campaignId);
+  };
+
+  const closeCampaignDetail = () => {
+    setSelectedCampaignId(null);
+    syncDashboardQuery(null);
+  };
+
   const dashboardStats = useMemo(() => {
     const activeCampaigns = campaigns.filter((item) => item.active).length;
     const totalBudgetCents = campaigns.reduce((acc, item) => acc + item.budget_total_cents, 0);
@@ -582,6 +607,39 @@ function App() {
       devRoleShare
     };
   }, [profiles, currentUserEmail]);
+
+  const selectedCampaign = useMemo(
+    () => (selectedCampaignId ? campaigns.find((campaign) => campaign.id === selectedCampaignId) ?? null : null),
+    [campaigns, selectedCampaignId]
+  );
+
+  const selectedCampaignDashboard = useMemo(
+    () => (selectedCampaignId ? campaignDashboards[selectedCampaignId] : undefined),
+    [campaignDashboards, selectedCampaignId]
+  );
+
+  const selectedCampaignStats = useMemo(() => {
+    if (!selectedCampaign) {
+      return null;
+    }
+
+    const spentCents = selectedCampaignDashboard?.spend_cents ??
+      Math.max(0, selectedCampaign.budget_total_cents - selectedCampaign.budget_remaining_cents);
+    const sponsoredCalls = selectedCampaignDashboard?.sponsored_calls ?? 0;
+    const tasksCompleted = selectedCampaignDashboard?.tasks_completed ?? 0;
+    const completionRate = sponsoredCalls > 0 ? (tasksCompleted / sponsoredCalls) * 100 : 0;
+    const utilizationRate = selectedCampaign.budget_total_cents > 0
+      ? (spentCents / selectedCampaign.budget_total_cents) * 100
+      : 0;
+
+    return {
+      spentCents,
+      sponsoredCalls,
+      tasksCompleted,
+      completionRate,
+      utilizationRate
+    };
+  }, [selectedCampaign, selectedCampaignDashboard]);
 
   const serviceCategories = useMemo(() => {
     const campaignTools = Array.from(
@@ -1630,6 +1688,110 @@ function App() {
             <section className="dashboard-main">
               {dashboardMode === "general" ? (
                 <>
+                  {selectedCampaignId ? (
+                    <section className="campaign-detail-view">
+                      <div className="card full-width">
+                        <div className="card-header campaign-detail-header">
+                          <div className="card-title">
+                            <h3>Campaign Detail</h3>
+                          </div>
+                          <button
+                            className="back-button-inline"
+                            onClick={closeCampaignDetail}
+                            title="Back to dashboard"
+                          >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M19 12H5"></path>
+                              <path d="M12 19l-7-7 7-7"></path>
+                            </svg>
+                            Back to Dashboard
+                          </button>
+                        </div>
+
+                        {loading && !selectedCampaign ? (
+                          <div className="card-content">
+                            <p>Loading campaign detail...</p>
+                          </div>
+                        ) : !selectedCampaign ? (
+                          <div className="card-content">
+                            <p>Campaign not found for ID: {selectedCampaignId}</p>
+                          </div>
+                        ) : (
+                          <div className="card-content campaign-detail-content">
+                            <div className="campaign-detail-top">
+                              <div>
+                                <h4 className="campaign-detail-name">{selectedCampaign.name}</h4>
+                                <p className="campaign-detail-id">Campaign ID: {selectedCampaign.id}</p>
+                              </div>
+                              <span className={selectedCampaign.active ? "status-badge active" : "status-badge paused"}>
+                                {selectedCampaign.active ? "ACTIVE" : "PAUSED"}
+                              </span>
+                            </div>
+
+                            <div className="metrics-row metrics-row-inner">
+                              <div className="metric-card metric-card-compact">
+                                <div className="metric-card-label">Sponsored Calls</div>
+                                <div className="metric-card-value">{selectedCampaignStats?.sponsoredCalls ?? 0}</div>
+                              </div>
+                              <div className="metric-card metric-card-compact">
+                                <div className="metric-card-label">Tasks Completed</div>
+                                <div className="metric-card-value">{selectedCampaignStats?.tasksCompleted ?? 0}</div>
+                              </div>
+                              <div className="metric-card metric-card-compact">
+                                <div className="metric-card-label">Spent</div>
+                                <div className="metric-card-value">${((selectedCampaignStats?.spentCents ?? 0) / 100).toFixed(2)}</div>
+                              </div>
+                              <div className="metric-card metric-card-compact">
+                                <div className="metric-card-label">Remaining Budget</div>
+                                <div className="metric-card-value">${(selectedCampaign.budget_remaining_cents / 100).toFixed(2)}</div>
+                              </div>
+                            </div>
+
+                            <div className="two-col-row campaign-detail-grid">
+                              <div className="card">
+                                <div className="card-header">
+                                  <div className="card-title"><h3>Configuration</h3></div>
+                                </div>
+                                <div className="card-content campaign-detail-list">
+                                  <p><strong>Sponsor:</strong> {selectedCampaign.sponsor}</p>
+                                  <p><strong>Required Task:</strong> {selectedCampaign.required_task || "N/A"}</p>
+                                  <p><strong>Subsidy per Call:</strong> ${(selectedCampaign.subsidy_per_call_cents / 100).toFixed(2)}</p>
+                                  <p><strong>Completion Rate:</strong> {(selectedCampaignStats?.completionRate ?? 0).toFixed(1)}%</p>
+                                  <p><strong>Budget Utilization:</strong> {(selectedCampaignStats?.utilizationRate ?? 0).toFixed(1)}%</p>
+                                </div>
+                              </div>
+                              <div className="card">
+                                <div className="card-header">
+                                  <div className="card-title"><h3>Targeting</h3></div>
+                                </div>
+                                <div className="card-content campaign-detail-list">
+                                  <p><strong>Roles:</strong> {selectedCampaign.target_roles.join(", ") || "N/A"}</p>
+                                  <p><strong>Tools:</strong> {selectedCampaign.target_tools.join(", ") || "N/A"}</p>
+                                  <p><strong>Created:</strong> {new Date(selectedCampaign.created_at).toLocaleString()}</p>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="card full-width">
+                              <div className="card-header">
+                                <div className="card-title"><h3>Query URLs</h3></div>
+                              </div>
+                              <div className="card-content campaign-query-list">
+                                {selectedCampaign.query_urls.length > 0 ? (
+                                  selectedCampaign.query_urls.map((url, index) => (
+                                    <p key={`${url}-${index}`} className="campaign-query-url">{url}</p>
+                                  ))
+                                ) : (
+                                  <p>No query URLs configured.</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  ) : (
+                    <>
 
           {/* A. Top Metrics Row */}
           <div className="metrics-row">
@@ -1897,22 +2059,23 @@ function App() {
                     <th>Subsidy</th>
                     <th>Budget Left</th>
                     <th>Status</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={6}>Loading dashboard...</td>
+                      <td colSpan={7}>Loading dashboard...</td>
                     </tr>
                   ) : campaigns.length === 0 ? (
                     <tr>
-                      <td colSpan={6}>No campaigns yet.</td>
+                      <td colSpan={7}>No campaigns yet.</td>
                     </tr>
                   ) : (
                     campaigns.map((campaign) => (
                       <tr
                         key={campaign.id}
-                        style={campaign.id === highlightedCampaignId ? { background: "rgba(14, 165, 233, 0.08)" } : undefined}
+                        style={campaign.id === selectedCampaignId ? { background: "rgba(14, 165, 233, 0.08)" } : undefined}
                       >
                         <td>{campaign.name}</td>
                         <td>{campaign.sponsor}</td>
@@ -1926,6 +2089,14 @@ function App() {
                             {campaign.active ? "ACTIVE" : "PAUSED"}
                           </span>
                         </td>
+                        <td>
+                          <button
+                            className="ghost-btn"
+                            onClick={() => openCampaignDetail(campaign.id)}
+                          >
+                            View Detail
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -1933,6 +2104,8 @@ function App() {
               </table>
             </div>
             </div>
+                    </>
+                  )}
                 </>
               ) : (
                 <>
