@@ -1,110 +1,292 @@
-# GPT App 結合テスト用（チャット入力テンプレート）
+# GPT App 結合テスト手順（自然な日本語プロンプト版）
 
-このページは、SubsidyPayment の結合テストを ChatGPT App 上で再現するための実運用向けプロンプト例をまとめたものです。
+この手順書は、**誰が見ても迷わず最後まで進める**ことを目的にしています。  
+各ステップの「入力例」をそのまま貼り付ければ実行できます。
 
-対象フロー（6ステップ）:
-1. サービス検索&一覧取得
-2. 1の中から使いたいサービス選択
-3. タスク選択
-4. タスク実行
-5. タスク完了＆支払い完了表示
-6. 最初に指定したサービスの呼び出し＆結果表示
+---
 
-## 前提
+## 0. このテストで確認すること
 
-- GPT Actions 連携時の operationId: `searchServices`, `authenticateUser`, `getTaskDetails`, `completeTask`, `runService`, `getUserStatus`
-- MCP 連携時のツール名: `search_services`, `authenticate_user`, `get_task_details`, `complete_task`, `run_service`, `get_user_status`
-- 実装上、支払い確定は通常 `runService` / `run_service` 実行時に行われます。
+次の7ステップが通るかを確認します。
 
-## 使い方（チャットインターフェース）
+1. キャンペーン作成
+2. サービス検索
+3. サービス選択
+4. タスク詳細取得
+5. タスク完了
+6. 実行可否確認
+7. サービス実行
 
-- ChatGPT App のチャット欄に、以下の「初回メッセージ」をそのまま貼り付けて送信します。
-- 以降は同じスレッドで、必要に応じて「追加入力メッセージ」を送って進行します。
+---
 
-## 1) 初回メッセージ（GPT Actions 版）
+## 1. 事前チェック
+
+- GPT App で SnapFuel MCP が接続済み
+- チャットで MCP ツールが実行できる状態
+- 迷ったら `get_prompt_guide_flow` を使う
+
+> 補足: `search_services` が `Invalid API key` で失敗する場合は、バックエンド設定を確認してください（通常は `GPT_API_KEY_ENFORCEMENT=false`）。
+
+---
+
+## 2. 進め方のルール
+
+- 各ステップで返る `structuredContent.next_actions` を最優先で使う
+- 不明点が出たら `get_prompt_guide_flow` を呼ぶ
+- 推測せず、ツール出力だけで判断する
+
+---
+
+## 3. 7ステップ実行（自然な日本語プロンプト）
+
+## Step 0: まずガイドを出す
+
+### 入力例（コピペ可）
 
 ```text
-これから SubsidyPayment の結合テストを実施します。必ず Action 呼び出しで確認し、あなたの知識で補完しないでください。
-目的は次の6ステップです。各ステップで「実行したAction名」「主要入力」「主要出力」を短く報告してください。
-
-【テスト条件】
-- キーワード: github
-- 予算上限: 50000 cents
-- 意図: GitHub Issueを作成したい
-- 同意: data_sharing_agreed=true, purpose_acknowledged=true, contact_permission=false
-- タスク証跡(details): {"github_username":"octocat","github_repo":"octo-org/subsidy-payment","issue_title":"[Bug] OAuth callback fails on Safari","issue_body":"Repro: 1) Login 2) Redirect loop 3) 401 on callback. Expected: successful callback."}
-
-【実行手順】
-1) サービス検索＆一覧取得
-- searchServices を使い、q/github + intent + max_budget_cents で検索
-- 候補を3件まで、service_id / sponsor / subsidy_amount_cents / required_task を一覧表示
-
-2) 1の中から使うサービス選択
-- relevance_score と required_task を見て最適な1件を選定し、選定理由を1行で説明
-
-3) タスク選択
-- getTaskDetails を呼び、実行すべき task_name と required_fields を確定
-
-4) タスク実行
-- completeTask を実行（上記 details と consent を使用）
-- can_use_service / consent_recorded / task_completion_id を表示
-
-5) タスク完了＆支払い完了表示
-- getUserStatus を実行し、選択サービスが実行可能状態か確認
-- 「実行可能か」「スポンサー名」「次アクション(runService)」を表示
-
-6) 最初に指定したサービスを実際に呼び出し、結果表示
-- runService を実行（input: "Create a GitHub issue in octo-org/subsidy-payment with title '[Bug] OAuth callback fails on Safari' and include reproduction steps.")
-- service / payment_mode / sponsored_by / message / output要約 を表示
-- 最後に6ステップの成否をチェックリストで出力
+最初の案内をお願いします。get_prompt_guide_flow を context_step=0, service=github で実行してください。
 ```
 
-## 2) 初回メッセージ（MCP ツール版）
+### 成功条件
+
+- `flow_step` が返る
+- `recommended_next_prompt` が返る
+- `next_actions` が1件以上ある
+
+---
+
+## Step 1: キャンペーンを作る
+
+### 入力例（コピペ可）
 
 ```text
-SubsidyPayment のMCP結合テストを6ステップで実行してください。
-必ずツール呼び出し結果のみを使って報告し、推測で補完しないでください。
-各ステップで「tool名」「input要約」「output要約」を示してください。
-
-条件:
-- q: github
-- intent: GitHub Issueを作成したい
-- max_budget_cents: 50000
-- complete_task の consent:
-  - data_sharing_agreed: true
-  - purpose_acknowledged: true
-  - contact_permission: false
-- complete_task の details(JSON文字列):
-  {"github_username":"octocat","github_repo":"octo-org/subsidy-payment","issue_title":"[Bug] OAuth callback fails on Safari","issue_body":"Repro: 1) Login 2) Redirect loop 3) 401 on callback. Expected: successful callback."}
-
-手順:
-1. search_services で候補を取得
-2. 候補から1件選ぶ（理由も示す）
-3. get_task_details で必要タスクを取得
-4. complete_task でタスク完了
-5. get_user_status で完了状態と実行可否を確認
-6. run_service でサービスを実行し、結果（Issue作成結果を含む）を表示
-
-最後に、6ステップの pass/fail 一覧を出してください。
+キャンペーンを新規作成したいです。create_campaign_from_goal を
+purpose=GitHub Issue作成導線の検証,
+sponsor=SnapFuel Demo,
+target_roles=["developer"],
+target_tools=["github"],
+required_task=product_feedback,
+subsidy_per_call_cents=5000,
+budget_cents=50000
+で実行してください。
 ```
 
-## チェック観点
+### 成功条件
 
-- サービス一覧にスポンサー情報・タスク要件・補助額が含まれる
-- タスク完了時に同意情報が記録される
-- サービス実行時に `payment_mode` と `sponsored_by` が返る
-- 最終的にサービス出力が要約される
+- `campaign_id` が返る
+- `service_key=github` のキャンペーンが作成される
+- `next_actions` が返る
 
-## 3) 追加入力メッセージ例（チャット欄で使用）
+### うまくいかないとき
 
 ```text
-候補1で進めてください。次のステップに進む前に、直前の tool/action の結果を1行で要約してください。
+キャンペーン作成で詰まったので、次の操作を案内してください。get_prompt_guide_flow を context_step=1, service=github で実行してください。
 ```
 
-```text
-タスク実行前に、complete_task/completeTask に渡す payload を表示してから実行してください。
-```
+---
+
+## Step 2: サービスを探す
+
+### 入力例（コピペ可）
 
 ```text
-最後に pass/fail の根拠として、各ステップで返ってきたキー項目を表でまとめてください。
+GitHubのIssue作成に使える候補を探したいです。search_services を q=github, intent=GitHub Issueを作成したい, max_budget_cents=50000, campaign_id=<campaign_id> で実行してください。
+```
+
+### 成功条件
+
+- 候補サービス一覧が返る
+- `next_actions` が返る
+
+### うまくいかないとき
+
+```text
+次に何をすればよいか案内してください。get_prompt_guide_flow を context_step=2, service=github, campaign_id=<campaign_id> で実行してください。
+```
+
+---
+
+## Step 3: 選んだサービスのタスク一覧を見る
+
+> Step2 の結果から `service_key` を1つ選んで使います（例: `github`）
+
+### 入力例（コピペ可）
+
+```text
+このサービスで必要なタスクを確認したいです。get_service_tasks を service_key=github で実行してください。
+```
+
+### 成功条件
+
+- `tasks` が返る
+- `campaign_id` が確認できる
+
+### うまくいかないとき
+
+```text
+この段階の正しい進め方を教えてください。get_prompt_guide_flow を context_step=3, service=github で実行してください。
+```
+
+---
+
+## Step 4: タスク詳細を取得する
+
+> Step3 で確認した `campaign_id` を使います
+
+### 入力例（コピペ可）
+
+```text
+タスクの入力要件を詳しく確認したいです。get_task_details を campaign_id=<campaign_id> で実行してください。
+```
+
+### 成功条件
+
+- `required_task` / `task_input_format` が返る
+- `next_actions` が返る
+
+### うまくいかないとき
+
+```text
+このステップで次にやることを教えてください。get_prompt_guide_flow を context_step=4, campaign_id=<campaign_id>, service=github で実行してください。
+```
+
+---
+
+## Step 5: タスクを完了する
+
+### 入力例（コピペ可）
+
+```text
+タスク完了を登録したいです。complete_task を次の内容で実行してください。
+- campaign_id: <campaign_id>
+- task_name: product_feedback
+- details: {"github_username":"octocat","github_repo":"octo-org/subsidy-payment","issue_title":"[Bug] OAuth callback fails on Safari","issue_body":"Repro: 1) Login 2) Redirect loop 3) 401 on callback. Expected: successful callback."}
+- consent: {"data_sharing_agreed":true,"purpose_acknowledged":true,"contact_permission":false}
+```
+
+### 成功条件
+
+- `can_use_service=true` または完了成功メッセージ
+- `task_completion_id` が返る
+
+### うまくいかないとき
+
+```text
+タスク完了に進むための案内をください。get_prompt_guide_flow を context_step=5, campaign_id=<campaign_id>, service=github で実行してください。
+```
+
+---
+
+## Step 6: 実行できる状態か確認する
+
+### 入力例（コピペ可）
+
+```text
+今の状態を確認したいです。get_user_status を実行してください。
+```
+
+### 成功条件
+
+- `available_services` に対象サービスがある
+- `next_actions` が返る
+
+### うまくいかないとき
+
+```text
+次に何を実行すべきか教えてください。get_prompt_guide_flow を context_step=6, service=github で実行してください。
+```
+
+---
+
+## Step 7: 実際にサービスを実行する
+
+### 入力例（コピペ可）
+
+```text
+実際にGitHub Issue作成を試したいです。run_service を service=github, input=Create a GitHub issue in octo-org/subsidy-payment with title "[Bug] OAuth callback fails on Safari" and include reproduction steps. で実行してください。
+```
+
+### 成功条件
+
+- `payment_mode` が返る
+- `sponsored_by` が返る（スポンサー利用時）
+- `output` に実行結果が入る
+
+### うまくいかないとき
+
+```text
+実行フェーズの進め方を案内してください。get_prompt_guide_flow を context_step=7, service=github で実行してください。
+```
+
+---
+
+## 4. run_service が詰まったときの2分切り分け
+
+次の4点を確認します。
+
+1. `run_service` の `service` 値（例: `github`）
+2. `campaign.target_tools` に同じキーがあるか
+3. `sponsored_apis.service_key` に同じキーがあるか
+4. `run_service` の `output` 生値
+
+### 切り分け入力例（コピペ可）
+
+```text
+run_service がうまく通らないので切り分けをお願いします。
+次の順で報告してください。
+1) 実行した service 値
+2) 一致している campaign.target_tools
+3) 一致している sponsored_apis.service_key
+4) run_service の output 生値（省略なし）
+5) 次に修正すべき候補を1つ
+```
+
+---
+
+## 5. 最終報告テンプレ
+
+### 入力例（コピペ可）
+
+```text
+7ステップの結果を次の形式でまとめてください。
+- Step1 create_campaign_from_goal: pass/fail（理由1行）
+- Step2 search_services: pass/fail（理由1行）
+- Step3 get_service_tasks: pass/fail（理由1行）
+- Step4 get_task_details: pass/fail（理由1行）
+- Step5 complete_task: pass/fail（理由1行）
+- Step6 get_user_status: pass/fail（理由1行）
+- Step7 run_service: pass/fail（理由1行）
+最後に未解決課題があれば最大3件で示してください。
+```
+
+---
+
+## 6. タスクのフィードバック提出用プロンプト
+
+`product_feedback` を提出するときに、そのまま使えるテンプレです。  
+`<campaign_id>` だけ差し替えて実行してください。
+
+### 入力例（コピペ可）
+
+```text
+プロダクトフィードバックを提出したいです。complete_task を次の内容で実行してください。
+- campaign_id: <campaign_id>
+- task_name: product_feedback
+- details: {
+  "rating": 4,
+  "summary": "全体としてスムーズに使えましたが、初回導線で迷う場面がありました。",
+  "what_worked": [
+    "ガイドに従って進めると目的の操作に到達できた",
+    "run_service 実行までの流れが明確だった"
+  ],
+  "issues": [
+    "キャンペーン作成時のエラーメッセージがやや抽象的",
+    "次に打つべきプロンプトの表示場所が分かりにくい画面がある"
+  ],
+  "improvements": [
+    "エラー時に再実行用プロンプトを必ず1つ表示してほしい",
+    "各ステップで『完了条件』を固定表示してほしい"
+  ]
+}
+- consent: {"data_sharing_agreed": true, "purpose_acknowledged": true, "contact_permission": false}
 ```
