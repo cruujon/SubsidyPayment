@@ -25,13 +25,29 @@ use crate::types::*;
 use crate::utils::*;
 use serde::Deserialize;
 
-fn build_gpt_router(state: SharedState) -> Router<SharedState> {
-    let limiter = Arc::new(tokio::sync::Mutex::new(gpt::RateLimiter::new(
-        60,
-        Duration::from_secs(60),
-    )));
+fn read_env_bool(name: &str, default: bool) -> bool {
+    std::env::var(name)
+        .ok()
+        .map(|value| {
+            let normalized = value.trim().to_ascii_lowercase();
+            matches!(normalized.as_str(), "1" | "true" | "yes" | "on")
+        })
+        .unwrap_or(default)
+}
 
-    Router::new()
+fn read_env_u32(name: &str, default: u32) -> u32 {
+    std::env::var(name)
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(default)
+}
+
+fn build_gpt_router(state: SharedState) -> Router<SharedState> {
+    let disable_all_rate_limits = read_env_bool("DISABLE_RATE_LIMITS", false);
+    let disable_gpt_rate_limit = disable_all_rate_limits || read_env_bool("GPT_RATE_LIMIT_DISABLED", false);
+    let gpt_rate_limit_per_min = read_env_u32("GPT_RATE_LIMIT_PER_MIN", 60);
+
+    let mut router = Router::new()
         .route("/services", get(gpt::gpt_search_services))
         .route("/auth", post(gpt::gpt_auth))
         .route("/tasks/{campaign_id}", get(gpt::gpt_get_tasks))
@@ -50,30 +66,41 @@ fn build_gpt_router(state: SharedState) -> Router<SharedState> {
             "/preferences",
             get(gpt::gpt_get_preferences).post(gpt::gpt_set_preferences),
         )
-        .layer(axum::middleware::from_fn_with_state(
+        .layer(axum::middleware::from_fn_with_state(state, gpt::verify_gpt_api_key));
+
+    if !disable_gpt_rate_limit && gpt_rate_limit_per_min > 0 {
+        let limiter = Arc::new(tokio::sync::Mutex::new(gpt::RateLimiter::new(
+            gpt_rate_limit_per_min,
+            Duration::from_secs(60),
+        )));
+        router = router.layer(axum::middleware::from_fn_with_state(
             limiter,
             gpt::rate_limit_middleware,
-        ))
-        .layer(axum::middleware::from_fn_with_state(
-            state,
-            gpt::verify_gpt_api_key,
-        ))
+        ));
+    }
+
+    router
 }
 
 fn build_agent_discovery_router(
     state: SharedState,
-    limiter: Arc<tokio::sync::Mutex<gpt::RateLimiter>>,
+    limiter: Option<Arc<tokio::sync::Mutex<gpt::RateLimiter>>>,
 ) -> Router<SharedState> {
-    Router::new()
+    let mut router = Router::new()
         .route("/services", get(agent_discovery_services))
         .layer(axum::middleware::from_fn_with_state(
             state,
             verify_agent_discovery_api_key,
-        ))
-        .layer(axum::middleware::from_fn_with_state(
+        ));
+
+    if let Some(limiter) = limiter {
+        router = router.layer(axum::middleware::from_fn_with_state(
             limiter,
             gpt::rate_limit_middleware,
-        ))
+        ));
+    }
+
+    router
 }
 
 async fn verify_agent_discovery_api_key(
@@ -109,10 +136,19 @@ async fn verify_agent_discovery_api_key(
 }
 
 fn build_app(state: SharedState, agent_discovery_limit_per_min: u32) -> Router {
-    let discovery_limiter = Arc::new(tokio::sync::Mutex::new(gpt::RateLimiter::new(
-        agent_discovery_limit_per_min,
-        Duration::from_secs(60),
-    )));
+    let disable_all_rate_limits = read_env_bool("DISABLE_RATE_LIMITS", false);
+    let disable_agent_discovery_rate_limit =
+        disable_all_rate_limits || read_env_bool("AGENT_DISCOVERY_RATE_LIMIT_DISABLED", false);
+    let effective_discovery_rate_limit =
+        read_env_u32("AGENT_DISCOVERY_RATE_LIMIT_PER_MIN", agent_discovery_limit_per_min);
+    let discovery_limiter = if disable_agent_discovery_rate_limit || effective_discovery_rate_limit == 0 {
+        None
+    } else {
+        Some(Arc::new(tokio::sync::Mutex::new(gpt::RateLimiter::new(
+            effective_discovery_rate_limit,
+            Duration::from_secs(60),
+        ))))
+    };
 
     Router::new()
         .route("/", get(health))
