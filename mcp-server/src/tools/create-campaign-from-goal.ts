@@ -144,12 +144,29 @@ function buildStructuredContent(
   searchResponse: GptSearchResponse,
   selection: CandidateSelection,
   subsidyPerCallCents: number,
-  requiredTask: string
+  requiredTask: string,
+  purpose: string
 ) {
   const frontendDashboardUrl = buildFrontendDashboardUrl(config.frontendUrl, response.campaign.id);
   const frontendCampaignUrl = buildFrontendCampaignUrl(config.frontendUrl, response.campaign.id);
+  const selectedServiceKey = selection.service_key || response.campaign.target_tools[0] || 'github';
+  const recommendedNextPrompt =
+    `Please run search_services with q=${selectedServiceKey}, intent="${purpose}", max_budget_cents=${response.campaign.budget_total_cents}, campaign_id=${response.campaign.id}.`;
+  const nextActions = [
+    {
+      action: 'Search services for this campaign',
+      prompt: recommendedNextPrompt,
+      tool: 'search_services',
+    },
+    {
+      action: 'Open guided flow (step 2)',
+      prompt: `Please run get_prompt_guide_flow with context_step=2, service=${selectedServiceKey}, campaign_id=${response.campaign.id}.`,
+      tool: 'get_prompt_guide_flow',
+    },
+  ];
   // モデル向けの構造化レスポンスを組み立てる
   return {
+    flow_step: '1',
     campaign_id: response.campaign.id,
     campaign: response.campaign,
     frontend_dashboard_url: frontendDashboardUrl,
@@ -163,6 +180,8 @@ function buildStructuredContent(
       required_task: requiredTask,
       subsidy_per_call_cents: subsidyPerCallCents,
     },
+    recommended_next_prompt: recommendedNextPrompt,
+    next_actions: nextActions,
     rationale:
       selection.source === 'candidate'
         ? 'Selected the highest-subsidy offer from candidate services.'
@@ -300,6 +319,9 @@ export function registerCreateCampaignFromGoalTool(server: McpServer, config: Ba
         const response = await client.createCampaign(request);
         const frontendDashboardUrl = buildFrontendDashboardUrl(config.frontendUrl, response.campaign.id);
         const frontendCampaignUrl = buildFrontendCampaignUrl(config.frontendUrl, response.campaign.id);
+        const selectedServiceKey = (selection?.service_key || request.target_tools[0] || 'github').trim() || 'github';
+        const nextPrompt =
+          `Please run search_services with q=${selectedServiceKey}, max_budget_cents=${response.campaign.budget_total_cents}, campaign_id=${response.campaign.id}.`;
         return {
           structuredContent: buildStructuredContent(
             config,
@@ -317,14 +339,15 @@ export function registerCreateCampaignFromGoalTool(server: McpServer, config: Ba
               source: 'service',
             },
             subsidyPerCallCents,
-            requiredTask
+            requiredTask,
+            input.purpose
           ),
           content: [
             {
               type: 'text' as const,
               text: frontendDashboardUrl
-                ? `Campaign created: ${response.campaign.name}. Open in frontend dashboard: ${frontendDashboardUrl}`
-                : `Campaign created: ${response.campaign.name}`,
+                ? `Campaign created: ${response.campaign.name}. Open in frontend dashboard: ${frontendDashboardUrl}. Next: ${nextPrompt}`
+                : `Campaign created: ${response.campaign.name}. Next: ${nextPrompt}`,
             },
           ],
           _meta: {

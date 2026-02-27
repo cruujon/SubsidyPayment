@@ -1,5 +1,6 @@
 export interface BackendConfig {
   rustBackendUrl: string;
+  rustBackendTimeoutMs: number;
   mcpInternalApiKey: string;
   auth0Domain: string;
   auth0Audience: string;
@@ -36,9 +37,16 @@ function parseTimeoutMs(value: string | undefined): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 15000;
 }
 
+function parseBackendTimeoutMs(value: string | undefined): number {
+  if (!value) return 65000;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 65000;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig {
   return {
     rustBackendUrl: env.RUST_BACKEND_URL || 'http://localhost:3000',
+    rustBackendTimeoutMs: parseBackendTimeoutMs(env.RUST_BACKEND_TIMEOUT_MS),
     mcpInternalApiKey: env.MCP_INTERNAL_API_KEY || '',
     auth0Domain: env.AUTH0_DOMAIN || '',
     auth0Audience: env.AUTH0_AUDIENCE || '',

@@ -26,6 +26,14 @@ function nextActionRunAgain(service: string) {
   ];
 }
 
+function nextActionViewRecord() {
+  return {
+    action: 'Check latest usage record',
+    prompt: 'Please run user_record and summarize the latest execution.',
+    tool: 'user_record',
+  };
+}
+
 function unauthorizedSessionResponse(publicUrl: string) {
   return {
     content: [{ type: 'text' as const, text: 'Login is required to perform this action. 次は「authenticate_user を実行してください」と入力してください。' }],
@@ -91,18 +99,22 @@ function serviceExecutedResult(response: {
   message: string;
   output: string;
 }) {
+  const nextActions = [nextActionViewRecord(), ...nextActionRunAgain(response.service)];
+  const recommendedNextPrompt = nextActions[0]?.prompt ?? 'Please run user_record.';
   return {
     structuredContent: {
+      flow_step: '7',
       mode: 'service_executed',
       service: response.service,
       payment_mode: response.payment_mode,
       sponsored_by: response.sponsored_by,
       tx_hash: response.tx_hash,
       message: response.message,
-      next_actions: nextActionRunAgain(response.service),
+      recommended_next_prompt: recommendedNextPrompt,
+      next_actions: nextActions,
     },
     content: [
-      { type: 'text' as const, text: response.message },
+      { type: 'text' as const, text: `${response.message} Next: ${recommendedNextPrompt}` },
     ],
     _meta: {
       output: response.output,
@@ -111,8 +123,22 @@ function serviceExecutedResult(response: {
 }
 
 function paymentRequiredResult(payment: PaymentRequiredResponse) {
+  const nextActions = [
+    {
+      action: 'x402で直接支払う',
+      prompt: `Please run run_service with service=${payment.service} and input=__pay_direct__.`,
+      tool: 'run_service',
+    },
+    {
+      action: 'Open guided flow',
+      prompt: `Please run get_prompt_guide_flow with context_step=7 and service=${payment.service}.`,
+      tool: 'get_prompt_guide_flow',
+    },
+  ];
+  const recommendedNextPrompt = nextActions[0]?.prompt ?? 'Please run get_prompt_guide_flow.';
   return {
     structuredContent: {
+      flow_step: '7',
       mode: 'payment_required',
       service: payment.service,
       amount_cents: payment.amount_cents,
@@ -120,16 +146,11 @@ function paymentRequiredResult(payment: PaymentRequiredResponse) {
       payment_required: payment.payment_required,
       next_step: payment.next_step,
       payment_mode: 'user_direct',
-      next_actions: [
-        {
-          action: 'x402で直接支払う',
-          prompt: `Please run run_service with service=${payment.service} and input=__pay_direct__.`,
-          tool: 'run_service',
-        },
-      ],
+      recommended_next_prompt: recommendedNextPrompt,
+      next_actions: nextActions,
     },
     content: [
-      { type: 'text' as const, text: `x402 payment required. ${payment.next_step}` },
+      { type: 'text' as const, text: `x402 payment required. ${payment.next_step} Next: ${recommendedNextPrompt}` },
     ],
     _meta: {
       payment_required: payment,
@@ -150,19 +171,23 @@ async function directPayFallbackResult(
       user_id: status.user_id,
       input: inputPayload.trim().toLowerCase() === DIRECT_PAYMENT_SENTINEL ? 'direct-pay-request' : inputPayload,
     });
+    const nextActions = [nextActionViewRecord(), ...nextActionRunAgain(service)];
+    const recommendedNextPrompt = nextActions[0]?.prompt ?? 'Please run user_record.';
 
     return {
       structuredContent: {
+        flow_step: '7',
         mode: 'service_executed',
         service: response.service,
         payment_mode: response.payment_mode,
         sponsored_by: response.sponsored_by,
         tx_hash: response.tx_hash,
         message: 'Service executed through proxy.',
-        next_actions: nextActionRunAgain(service),
+        recommended_next_prompt: recommendedNextPrompt,
+        next_actions: nextActions,
       },
       content: [
-        { type: 'text' as const, text: 'Service executed through proxy.' },
+        { type: 'text' as const, text: `Service executed through proxy. Next: ${recommendedNextPrompt}` },
       ],
       _meta: {
         output: response.output,
@@ -211,6 +236,7 @@ async function taskRequiredResult(client: BackendClient, service: string, sessio
 
   return {
     structuredContent: {
+      flow_step: '4',
       mode: 'task_required',
       service,
       campaign_id: task.campaign_id,
@@ -222,6 +248,7 @@ async function taskRequiredResult(client: BackendClient, service: string, sessio
       subsidy_amount_cents: task.subsidy_amount_cents,
       task_options: taskOptions,
       payment_mode: 'sponsored',
+      recommended_next_prompt: `Please run get_task_details with campaign_id=${task.campaign_id}.`,
       next_actions: [
         {
           action: '必須タスクを開く',
@@ -233,7 +260,7 @@ async function taskRequiredResult(client: BackendClient, service: string, sessio
     content: [
       {
         type: 'text' as const,
-        text: `Free option available. Complete '${task.required_task}' to unlock sponsor coverage, or switch to direct x402 payment.`,
+        text: `Free option available. Complete '${task.required_task}' to unlock sponsor coverage, or switch to direct x402 payment. Next: Please run get_task_details with campaign_id=${task.campaign_id}.`,
       },
     ],
     _meta: {

@@ -17,14 +17,29 @@ function isUuid(s: string): boolean {
   return UUID_REGEX.test(s);
 }
 
-function buildNextActions(campaignId: string) {
+function buildNextActions(campaignId: string, requiredTask?: string, alreadyCompleted?: boolean) {
+  if (alreadyCompleted) {
+    return [
+      {
+        action: 'Check run readiness',
+        prompt: 'Please run get_user_status.',
+        tool: 'get_user_status',
+      },
+    ];
+  }
+
+  const taskName = requiredTask && requiredTask.trim().length > 0 ? requiredTask.trim() : '<task_name>';
   return [
     {
-      action: 'タスクを完了する',
-      prompt: `Please run complete_task with campaign_id=${campaignId}.`,
+      action: 'Complete the required task',
+      prompt: `Please run complete_task with campaign_id=${campaignId} and task_name=${taskName}.`,
       tool: 'complete_task',
     },
   ];
+}
+
+function buildRecommendedNextPrompt(campaignId: string, requiredTask?: string, alreadyCompleted?: boolean): string {
+  return buildNextActions(campaignId, requiredTask, alreadyCompleted)[0]?.prompt ?? 'Please run get_prompt_guide_flow.';
 }
 
 function unauthorizedSessionResponse(publicUrl: string) {
@@ -108,9 +123,16 @@ export function registerGetTaskDetailsTool(server: McpServer, config: BackendCon
         }
 
         const response = await client.getTaskDetails(input.campaign_id, sessionToken);
+        const nextActions = buildNextActions(response.campaign_id, response.required_task, response.already_completed);
+        const recommendedNextPrompt = buildRecommendedNextPrompt(
+          response.campaign_id,
+          response.required_task,
+          response.already_completed
+        );
 
         return {
           structuredContent: {
+            flow_step: '4',
             campaign_id: response.campaign_id,
             campaign_name: response.campaign_name,
             sponsor: response.sponsor,
@@ -119,10 +141,11 @@ export function registerGetTaskDetailsTool(server: McpServer, config: BackendCon
             task_input_format: response.task_input_format,
             already_completed: response.already_completed,
             subsidy_amount_cents: response.subsidy_amount_cents,
-            next_actions: buildNextActions(response.campaign_id),
+            recommended_next_prompt: recommendedNextPrompt,
+            next_actions: nextActions,
           },
           content: [
-            { type: 'text' as const, text: response.message },
+            { type: 'text' as const, text: `${response.message} Next: ${recommendedNextPrompt}` },
           ],
           _meta: {
             'openai/outputTemplate': 'ui://widget/task-form.html',

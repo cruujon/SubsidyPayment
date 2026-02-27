@@ -54,7 +54,7 @@ export class BackendClient {
   constructor(config: BackendConfig) {
     this.baseUrl = config.rustBackendUrl.replace(/\/$/, '');
     this.apiKey = config.mcpInternalApiKey;
-    this.timeoutMs = 15000;
+    this.timeoutMs = config.rustBackendTimeoutMs;
   }
 
   async searchServices(params: SearchServicesParams): Promise<GptSearchResponse> {
@@ -65,6 +65,7 @@ export class BackendClient {
       query.set('max_budget_cents', String(params.max_budget_cents));
     }
     if (params.intent) query.set('intent', params.intent);
+    if (params.campaign_id) query.set('campaign_id', params.campaign_id);
     if (params.session_token) query.set('session_token', params.session_token);
     return this.request<GptSearchResponse>(`/gpt/services?${query.toString()}`, { method: 'GET' });
   }

@@ -102,6 +102,10 @@ function buildNextActions() {
   ];
 }
 
+function buildRecommendedNextPrompt(): string {
+  return 'Please run get_user_status.';
+}
+
 function unauthorizedSessionResponse(publicUrl: string) {
   return {
     content: [{ type: 'text' as const, text: 'Login is required to perform this action. 次は「authenticate_user を実行してください」と入力してください。' }],
@@ -208,8 +212,10 @@ export function registerCompleteTaskTool(server: McpServer, config: BackendConfi
           // Non-critical: proceed with partial data from input
         }
 
+        const recommendedNextPrompt = buildRecommendedNextPrompt();
         return {
           structuredContent: {
+            flow_step: '5',
             task_completion_id: response.task_completion_id,
             campaign_id: response.campaign_id,
             consent_recorded: response.consent_recorded,
@@ -218,9 +224,10 @@ export function registerCompleteTaskTool(server: McpServer, config: BackendConfi
             sponsor,
             campaign_name: campaignName,
             subsidy_amount_cents: subsidyAmountCents,
+            recommended_next_prompt: recommendedNextPrompt,
             next_actions: buildNextActions(),
           },
-          content: [{ type: 'text' as const, text: response.message }],
+          content: [{ type: 'text' as const, text: `${response.message} Next: ${recommendedNextPrompt}` }],
           _meta: {
             full_response: response,
           },

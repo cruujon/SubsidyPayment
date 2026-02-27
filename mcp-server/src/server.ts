@@ -9,7 +9,7 @@ export function createServer(config: BackendConfig): McpServer {
     name: 'snapfuel',
     version: '1.0.0',
     description:
-      'Guided 6-step MCP flow. Always show one explicit next prompt and prefer get_prompt_guide_flow when the user is unsure.',
+      'Guided 7-step MCP flow for campaign -> task -> run. Always show one explicit next prompt and prefer get_prompt_guide_flow when the user is unsure.',
   });
 
   registerAllTools(server, config);
