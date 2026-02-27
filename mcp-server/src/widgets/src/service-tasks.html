@@ -218,6 +218,42 @@
         background: rgba(15, 23, 42, 0.45);
         padding: 16px;
       }
+
+      .flow-links {
+        margin: 0 20px 16px;
+        border-radius: 10px;
+        border: 1px solid rgba(14, 165, 233, 0.45);
+        background: rgba(14, 165, 233, 0.12);
+        padding: 10px 12px;
+        font-size: 12px;
+        color: #bae6fd;
+        display: grid;
+        gap: 8px;
+      }
+
+      .flow-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .flow-btn {
+        border: 1px solid rgba(14, 165, 233, 0.7);
+        border-radius: 8px;
+        background: rgba(14, 165, 233, 0.2);
+        color: #e0f2fe;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        color: #e2e8f0;
+        word-break: break-all;
+      }
     </style>
   </head>
   <body>
@@ -254,6 +290,12 @@
       const taskCount = Number(structured.task_count ?? tasks.length);
       const totalSubsidyCents = Number(structured.total_subsidy_cents ?? 0);
       const serviceKey = typeof structured.service_key === 'string' ? structured.service_key : widgetState?.selectedServiceKey ?? '';
+      const frontendDashboardUrl =
+        typeof structured.frontend_dashboard_url === 'string' ? structured.frontend_dashboard_url : '';
+      const serviceRunApiUrl =
+        typeof structured.service_run_api_url === 'string' ? structured.service_run_api_url : '';
+      const firstTaskFrontendUrl =
+        typeof tasks[0]?.frontend_campaign_url === 'string' ? tasks[0].frontend_campaign_url : '';
 
       function escapeHtml(value) {
         return String(value ?? '')
@@ -277,6 +319,19 @@
 
       async function setWidgetState(nextState) {
         return app?.setWidgetState?.(nextState);
+      }
+
+      async function openExternalLink(url) {
+        if (!url || typeof url !== 'string') return;
+        if (typeof app?.openLink === 'function') {
+          try {
+            await app.openLink({ url });
+            return;
+          } catch {
+            // fall through
+          }
+        }
+        window.open(url, '_blank', 'noopener,noreferrer');
       }
 
       async function onGuideClick() {
@@ -362,6 +417,44 @@
             <span>👛 Total available subsidy:</span>
             <strong>${escapeHtml(formatDollars(totalSubsidyCents))}</strong>
           </section>
+          ${
+            firstTaskFrontendUrl || frontendDashboardUrl || serviceRunApiUrl
+              ? `
+            <section class="flow-links">
+              ${
+                firstTaskFrontendUrl
+                  ? `
+                <div class="flow-row">
+                  <span>Campaign details (frontend)</span>
+                  <button class="flow-btn" id="open-campaign-link">Open</button>
+                </div>
+              `
+                  : ''
+              }
+              ${
+                frontendDashboardUrl
+                  ? `
+                <div class="flow-row">
+                  <span>Frontend dashboard</span>
+                  <button class="flow-btn" id="open-dashboard-link">Open</button>
+                </div>
+              `
+                  : ''
+              }
+              ${
+                serviceRunApiUrl
+                  ? `
+                <div>
+                  <div>Run API after task</div>
+                  <div class="mono">${escapeHtml(serviceRunApiUrl)}</div>
+                </div>
+              `
+                  : ''
+              }
+            </section>
+          `
+              : ''
+          }
         `;
 
         root.querySelector('#back-btn')?.addEventListener('click', () => {
@@ -381,6 +474,13 @@
             }
           });
         }
+
+        root.querySelector('#open-campaign-link')?.addEventListener('click', () => {
+          void openExternalLink(firstTaskFrontendUrl);
+        });
+        root.querySelector('#open-dashboard-link')?.addEventListener('click', () => {
+          void openExternalLink(frontendDashboardUrl);
+        });
 
         notifyWidgetHeight(app);
       }

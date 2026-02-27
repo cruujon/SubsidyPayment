@@ -5,6 +5,12 @@ import { z } from 'zod';
 import { TokenVerifier } from '../auth/token-verifier.ts';
 import { BackendClient, BackendClientError } from '../backend-client.ts';
 import type { BackendConfig } from '../config.ts';
+import {
+  buildBackendCampaignDetailsUrl,
+  buildBackendRunServiceUrl,
+  buildFrontendCampaignUrl,
+  buildFrontendDashboardUrl,
+} from './flow-links.ts';
 import { resolveOrCreateNoAuthSessionToken } from './session-manager.ts';
 
 const getTaskDetailsInputSchema = z.object({
@@ -123,6 +129,22 @@ export function registerGetTaskDetailsTool(server: McpServer, config: BackendCon
         }
 
         const response = await client.getTaskDetails(input.campaign_id, sessionToken);
+        let unlockServiceKey = '';
+        try {
+          const campaign = await client.getCampaign(response.campaign_id);
+          const candidate = Array.isArray(campaign.target_tools)
+            ? campaign.target_tools.find((item) => typeof item === 'string' && item.trim().length > 0)
+            : '';
+          unlockServiceKey = typeof candidate === 'string' ? candidate.trim() : '';
+        } catch {
+          unlockServiceKey = '';
+        }
+        const frontendCampaignUrl = buildFrontendCampaignUrl(config.frontendUrl, response.campaign_id);
+        const frontendDashboardUrl = buildFrontendDashboardUrl(config.frontendUrl);
+        const backendCampaignUrl = buildBackendCampaignDetailsUrl(config.rustBackendUrl, response.campaign_id);
+        const runServiceApiUrl = unlockServiceKey
+          ? buildBackendRunServiceUrl(config.rustBackendUrl, unlockServiceKey)
+          : buildBackendRunServiceUrl(config.rustBackendUrl, '<service_key>');
         const nextActions = buildNextActions(response.campaign_id, response.required_task, response.already_completed);
         const recommendedNextPrompt = buildRecommendedNextPrompt(
           response.campaign_id,
@@ -141,11 +163,23 @@ export function registerGetTaskDetailsTool(server: McpServer, config: BackendCon
             task_input_format: response.task_input_format,
             already_completed: response.already_completed,
             subsidy_amount_cents: response.subsidy_amount_cents,
+            unlock_service_key: unlockServiceKey || null,
+            frontend_campaign_url: frontendCampaignUrl,
+            frontend_dashboard_url: frontendDashboardUrl,
+            backend_campaign_url: backendCampaignUrl,
+            run_service_api_url: runServiceApiUrl,
             recommended_next_prompt: recommendedNextPrompt,
             next_actions: nextActions,
           },
           content: [
-            { type: 'text' as const, text: `${response.message} Next: ${recommendedNextPrompt}` },
+            {
+              type: 'text' as const,
+              text:
+                `${response.message} ` +
+                `Campaign details URL: ${frontendCampaignUrl || backendCampaignUrl || 'N/A'}. ` +
+                `Run API after task: ${runServiceApiUrl || 'N/A'}. ` +
+                `Next: ${recommendedNextPrompt}`,
+            },
           ],
           _meta: {
             'openai/outputTemplate': 'ui://widget/task-form.html',

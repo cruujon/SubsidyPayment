@@ -2,6 +2,7 @@ import type { BackendConfig } from './config.ts';
 import type {
   AuthenticateUserParams,
   BackendErrorResponse,
+  Campaign,
   CompleteTaskInput,
   CreateCampaignRequest,
   CreateCampaignResponse,
@@ -166,6 +167,10 @@ export class BackendClient {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  }
+
+  async getCampaign(campaignId: string): Promise<Campaign> {
+    return this.request<Campaign>(`/campaigns/${encodeURIComponent(campaignId)}`, { method: 'GET' });
   }
 
   /**

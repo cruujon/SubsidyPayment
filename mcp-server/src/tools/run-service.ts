@@ -6,6 +6,12 @@ import { TokenVerifier } from '../auth/token-verifier.ts';
 import { BackendClient, BackendClientError } from '../backend-client.ts';
 import type { BackendConfig } from '../config.ts';
 import type { PaymentRequiredResponse } from '../types.ts';
+import {
+  buildBackendCampaignDetailsUrl,
+  buildBackendRunServiceUrl,
+  buildFrontendCampaignUrl,
+  buildFrontendDashboardUrl,
+} from './flow-links.ts';
 import { resolveOrCreateNoAuthSessionToken } from './session-manager.ts';
 
 const runServiceInputSchema = z.object({
@@ -98,7 +104,7 @@ function serviceExecutedResult(response: {
   tx_hash: string | null;
   message: string;
   output: string;
-}) {
+}, runServiceApiUrl: string) {
   const nextActions = [nextActionViewRecord(), ...nextActionRunAgain(response.service)];
   const recommendedNextPrompt = nextActions[0]?.prompt ?? 'Please run user_record.';
   return {
@@ -110,11 +116,15 @@ function serviceExecutedResult(response: {
       sponsored_by: response.sponsored_by,
       tx_hash: response.tx_hash,
       message: response.message,
+      run_service_api_url: runServiceApiUrl,
       recommended_next_prompt: recommendedNextPrompt,
       next_actions: nextActions,
     },
     content: [
-      { type: 'text' as const, text: `${response.message} Next: ${recommendedNextPrompt}` },
+      {
+        type: 'text' as const,
+        text: `${response.message} Run API: ${runServiceApiUrl || 'N/A'}. Next: ${recommendedNextPrompt}`,
+      },
     ],
     _meta: {
       output: response.output,
@@ -122,7 +132,7 @@ function serviceExecutedResult(response: {
   };
 }
 
-function paymentRequiredResult(payment: PaymentRequiredResponse) {
+function paymentRequiredResult(payment: PaymentRequiredResponse, runServiceApiUrl: string) {
   const nextActions = [
     {
       action: 'x402で直接支払う',
@@ -146,11 +156,18 @@ function paymentRequiredResult(payment: PaymentRequiredResponse) {
       payment_required: payment.payment_required,
       next_step: payment.next_step,
       payment_mode: 'user_direct',
+      run_service_api_url: runServiceApiUrl,
       recommended_next_prompt: recommendedNextPrompt,
       next_actions: nextActions,
     },
     content: [
-      { type: 'text' as const, text: `x402 payment required. ${payment.next_step} Next: ${recommendedNextPrompt}` },
+      {
+        type: 'text' as const,
+        text:
+          `x402 payment required. ${payment.next_step} ` +
+          `Run API: ${runServiceApiUrl || 'N/A'}. ` +
+          `Next: ${recommendedNextPrompt}`,
+      },
     ],
     _meta: {
       payment_required: payment,
@@ -162,7 +179,8 @@ async function directPayFallbackResult(
   client: BackendClient,
   service: string,
   inputPayload: string,
-  sessionToken: string
+  sessionToken: string,
+  runServiceApiUrl: string
 ) {
   const status = await client.getUserStatus(sessionToken);
 
@@ -183,6 +201,7 @@ async function directPayFallbackResult(
         sponsored_by: response.sponsored_by,
         tx_hash: response.tx_hash,
         message: 'Service executed through proxy.',
+        run_service_api_url: runServiceApiUrl,
         recommended_next_prompt: recommendedNextPrompt,
         next_actions: nextActions,
       },
@@ -196,7 +215,7 @@ async function directPayFallbackResult(
   } catch (error) {
     if (error instanceof BackendClientError && error.code === 'payment_required') {
       const payment = parsePaymentRequired(error.details);
-      if (payment) return paymentRequiredResult(payment);
+      if (payment) return paymentRequiredResult(payment, runServiceApiUrl);
     }
     throw error;
   }
@@ -223,7 +242,7 @@ function deriveTaskOptions(taskInputFormat: { task_type?: string; required_field
   return options;
 }
 
-async function taskRequiredResult(client: BackendClient, service: string, sessionToken: string) {
+async function taskRequiredResult(client: BackendClient, config: BackendConfig, service: string, sessionToken: string) {
   const searchResponse = await client.searchServices({
     q: service,
     session_token: sessionToken,
@@ -232,6 +251,10 @@ async function taskRequiredResult(client: BackendClient, service: string, sessio
   if (!campaign) return null;
 
   const task = await client.getTaskDetails(campaign.service_id, sessionToken);
+  const frontendCampaignUrl = buildFrontendCampaignUrl(config.frontendUrl, task.campaign_id);
+  const frontendDashboardUrl = buildFrontendDashboardUrl(config.frontendUrl);
+  const backendCampaignUrl = buildBackendCampaignDetailsUrl(config.rustBackendUrl, task.campaign_id);
+  const runServiceApiUrl = buildBackendRunServiceUrl(config.rustBackendUrl, service);
   const taskOptions = deriveTaskOptions(task.task_input_format);
 
   return {
@@ -248,6 +271,10 @@ async function taskRequiredResult(client: BackendClient, service: string, sessio
       subsidy_amount_cents: task.subsidy_amount_cents,
       task_options: taskOptions,
       payment_mode: 'sponsored',
+      frontend_campaign_url: frontendCampaignUrl,
+      frontend_dashboard_url: frontendDashboardUrl,
+      backend_campaign_url: backendCampaignUrl,
+      run_service_api_url: runServiceApiUrl,
       recommended_next_prompt: `Please run get_task_details with campaign_id=${task.campaign_id}.`,
       next_actions: [
         {
@@ -260,7 +287,11 @@ async function taskRequiredResult(client: BackendClient, service: string, sessio
     content: [
       {
         type: 'text' as const,
-        text: `Free option available. Complete '${task.required_task}' to unlock sponsor coverage, or switch to direct x402 payment. Next: Please run get_task_details with campaign_id=${task.campaign_id}.`,
+        text:
+          `Free option available. Complete '${task.required_task}' to unlock sponsor coverage, or switch to direct x402 payment. ` +
+          `Campaign details URL: ${frontendCampaignUrl || backendCampaignUrl || 'N/A'}. ` +
+          `Run API after task: ${runServiceApiUrl || 'N/A'}. ` +
+          `Next: Please run get_task_details with campaign_id=${task.campaign_id}.`,
       },
     ],
     _meta: {
@@ -316,11 +347,12 @@ export function registerRunServiceTool(server: McpServer, config: BackendConfig)
       if (!sessionToken) {
         return unauthorizedSessionResponse(config.publicUrl);
       }
+      const runServiceApiUrl = buildBackendRunServiceUrl(config.rustBackendUrl, input.service);
 
 
       if (input.input.trim().toLowerCase() === DIRECT_PAYMENT_SENTINEL) {
         try {
-          return await directPayFallbackResult(client, input.service, input.input, sessionToken);
+          return await directPayFallbackResult(client, input.service, input.input, sessionToken, runServiceApiUrl);
         } catch (error) {
           if (error instanceof BackendClientError) {
             return {
@@ -344,18 +376,18 @@ export function registerRunServiceTool(server: McpServer, config: BackendConfig)
           input: input.input,
         });
 
-        return serviceExecutedResult(response);
+        return serviceExecutedResult(response, runServiceApiUrl);
       } catch (error) {
         if (error instanceof BackendClientError) {
           if (error.code === 'payment_required') {
             const payment = parsePaymentRequired(error.details);
-            if (payment) return paymentRequiredResult(payment);
+            if (payment) return paymentRequiredResult(payment, runServiceApiUrl);
           }
 
           if (error.code === 'precondition_required') {
             if (isTaskRequiredMessage(error.message)) {
               try {
-                const taskResult = await taskRequiredResult(client, input.service, sessionToken);
+                const taskResult = await taskRequiredResult(client, config, input.service, sessionToken);
                 if (taskResult) return taskResult;
               } catch {
                 // fall through to backend error
@@ -364,7 +396,7 @@ export function registerRunServiceTool(server: McpServer, config: BackendConfig)
 
             if (isNoSponsorMessage(error.message)) {
               try {
-                return await directPayFallbackResult(client, input.service, input.input, sessionToken);
+                return await directPayFallbackResult(client, input.service, input.input, sessionToken, runServiceApiUrl);
               } catch {
                 // fall through to backend error
               }

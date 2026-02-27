@@ -120,6 +120,24 @@
         font-size: 12px;
       }
 
+      .url-actions {
+        margin-top: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .url-link-btn {
+        border: 1px solid rgba(14, 165, 233, 0.6);
+        border-radius: 8px;
+        background: rgba(14, 165, 233, 0.2);
+        color: #bae6fd;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+
       .content {
         margin: 0 20px;
         border: 1px solid var(--border);
@@ -497,6 +515,9 @@
       const subsidyAmount = Number(data.subsidy_amount_cents ?? 0) / 100;
       const task_input_format = data.task_input_format ?? {};
       const alreadyCompleted = Boolean(data.already_completed);
+      const frontendCampaignUrl = typeof data.frontend_campaign_url === 'string' ? data.frontend_campaign_url : '';
+      const frontendDashboardUrl = typeof data.frontend_dashboard_url === 'string' ? data.frontend_dashboard_url : '';
+      const runServiceApiUrl = typeof data.run_service_api_url === 'string' ? data.run_service_api_url : '';
       const selectedServiceKey = typeof widgetState?.selectedServiceKey === 'string' ? widgetState.selectedServiceKey : '';
       const taskType = typeof task_input_format?.task_type === 'string' && task_input_format.task_type.length > 0 ? task_input_format.task_type : 'survey';
       const taskConstraints =
@@ -1002,7 +1023,32 @@
             <span class="status">In Progress</span>
           </section>
           <section class="urlbar">
-            <div class="url-inner">🔒 ${escapeHtml(selectedServiceName)} / ${isZkpassportTask ? 'verification' : 'signup'}</div>
+            <div class="url-inner">
+              🔒 ${escapeHtml(selectedServiceName)} / ${isZkpassportTask ? 'verification' : 'signup'}
+              ${
+                frontendCampaignUrl || frontendDashboardUrl
+                  ? `
+                <div class="url-actions">
+                  ${
+                    frontendCampaignUrl
+                      ? '<button class="url-link-btn" type="button" id="open-campaign-link">Open campaign on frontend</button>'
+                      : ''
+                  }
+                  ${
+                    frontendDashboardUrl
+                      ? '<button class="url-link-btn" type="button" id="open-dashboard-link">Open frontend dashboard</button>'
+                      : ''
+                  }
+                </div>
+              `
+                  : ''
+              }
+              ${
+                runServiceApiUrl
+                  ? `<div style="margin-top:8px;color:#cbd5e1;">Run API after task: <span style="word-break:break-all;">${escapeHtml(runServiceApiUrl)}</span></div>`
+                  : ''
+              }
+            </div>
           </section>
           <section class="content">
             <span class="brand">${escapeHtml(brandInitials || 'SV')}</span>
@@ -1035,6 +1081,13 @@
 
         root.querySelector('#direct-payment')?.addEventListener('click', () => {
           void onDirectPayment();
+        });
+
+        root.querySelector('#open-campaign-link')?.addEventListener('click', () => {
+          void openExternalLink(frontendCampaignUrl);
+        });
+        root.querySelector('#open-dashboard-link')?.addEventListener('click', () => {
+          void openExternalLink(frontendDashboardUrl);
         });
 
         root.querySelector('#zk-open-primary-link')?.addEventListener('click', () => {

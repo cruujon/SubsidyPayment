@@ -6,6 +6,12 @@ import { TokenVerifier } from '../auth/token-verifier.ts';
 import { BackendClient, BackendClientError } from '../backend-client.ts';
 import type { BackendConfig } from '../config.ts';
 import type { GptCandidateServiceOffer, GptSearchResponse } from '../types.ts';
+import {
+  buildBackendCampaignDetailsUrl,
+  buildBackendRunServiceUrl,
+  buildFrontendCampaignUrl,
+  buildFrontendDashboardUrl,
+} from './flow-links.ts';
 import { resolveOrCreateNoAuthSessionToken } from './session-manager.ts';
 
 const getServiceTasksInputSchema = z.object({
@@ -17,11 +23,15 @@ interface ServiceTaskItem {
   campaign_id: string;
   campaign_name: string;
   sponsor: string;
+  service_key: string;
   required_task: string | null;
   subsidy_amount_cents: number;
   category: string[];
   tags: string[];
   active: boolean;
+  frontend_campaign_url: string;
+  backend_campaign_url: string;
+  run_service_api_url: string;
 }
 
 function buildNextActions(serviceKey: string, campaignId?: string) {
@@ -75,6 +85,7 @@ function resolveBearerToken(context: any): string | null {
 }
 
 function buildTasksFromSearchResponse(
+  config: BackendConfig,
   serviceKey: string,
   response: GptSearchResponse
 ): {
@@ -91,18 +102,24 @@ function buildTasksFromSearchResponse(
   );
 
   if (candidate && candidate.offers.length > 0) {
-    return buildFromCandidateOffers(candidate.display_name, candidate.offers, response);
+    return buildFromCandidateOffers(config, serviceKey, candidate.display_name, candidate.offers, response);
   }
 
   // Fallback: filter raw services array by name match
   const matchedServices = response.services.filter(
     (svc) =>
       svc.service_type === 'campaign' &&
-      svc.name.toLowerCase().includes(normalizedKey)
+      (
+        svc.name.toLowerCase().includes(normalizedKey) ||
+        svc.sponsor.toLowerCase().includes(normalizedKey) ||
+        svc.category.some((category) => category.toLowerCase().includes(normalizedKey)) ||
+        svc.tags.some((tag) => tag.toLowerCase().includes(normalizedKey))
+      )
   );
 
   if (matchedServices.length > 0) {
     const tasks: ServiceTaskItem[] = matchedServices.map((svc) => ({
+      service_key: serviceKey,
       campaign_id: svc.service_id,
       campaign_name: svc.name,
       sponsor: svc.sponsor,
@@ -111,6 +128,9 @@ function buildTasksFromSearchResponse(
       category: svc.category,
       tags: svc.tags,
       active: svc.active,
+      frontend_campaign_url: buildFrontendCampaignUrl(config.frontendUrl, svc.service_id),
+      backend_campaign_url: buildBackendCampaignDetailsUrl(config.rustBackendUrl, svc.service_id),
+      run_service_api_url: buildBackendRunServiceUrl(config.rustBackendUrl, serviceKey),
     }));
 
     const sponsorNames = [...new Set(tasks.map((t) => t.sponsor))];
@@ -128,6 +148,8 @@ function buildTasksFromSearchResponse(
 }
 
 function buildFromCandidateOffers(
+  config: BackendConfig,
+  serviceKey: string,
   displayName: string,
   offers: GptCandidateServiceOffer[],
   response: GptSearchResponse
@@ -144,6 +166,7 @@ function buildFromCandidateOffers(
     );
 
     return {
+      service_key: serviceKey,
       campaign_id: offer.campaign_id,
       campaign_name: offer.campaign_name,
       sponsor: offer.sponsor,
@@ -152,6 +175,9 @@ function buildFromCandidateOffers(
       category: rawService?.category ?? [],
       tags: rawService?.tags ?? [],
       active: rawService?.active ?? true,
+      frontend_campaign_url: buildFrontendCampaignUrl(config.frontendUrl, offer.campaign_id),
+      backend_campaign_url: buildBackendCampaignDetailsUrl(config.rustBackendUrl, offer.campaign_id),
+      run_service_api_url: buildBackendRunServiceUrl(config.rustBackendUrl, serviceKey),
     };
   });
 
@@ -217,7 +243,9 @@ export function registerGetServiceTasksTool(server: McpServer, config: BackendCo
           session_token: sessionToken ?? undefined,
         });
 
-        const result = buildTasksFromSearchResponse(input.service_key, searchResponse);
+        const result = buildTasksFromSearchResponse(config, input.service_key, searchResponse);
+        const frontendDashboardUrl = buildFrontendDashboardUrl(config.frontendUrl);
+        const runServiceApiUrl = buildBackendRunServiceUrl(config.rustBackendUrl, input.service_key);
 
         if (!result || result.tasks.length === 0) {
           const recommendedNextPrompt = buildRecommendedNextPrompt(input.service_key);
@@ -230,13 +258,19 @@ export function registerGetServiceTasksTool(server: McpServer, config: BackendCo
               task_count: 0,
               sponsor_names: [],
               total_subsidy_cents: 0,
+              frontend_dashboard_url: frontendDashboardUrl,
+              service_run_api_url: runServiceApiUrl,
               recommended_next_prompt: recommendedNextPrompt,
               next_actions: buildNextActions(input.service_key),
             },
             content: [
               {
                 type: 'text' as const,
-                text: `No subsidized tasks found for service "${input.service_key}". Next: ${recommendedNextPrompt}`,
+                text:
+                  `No subsidized tasks found for service "${input.service_key}". ` +
+                  `Frontend dashboard URL: ${frontendDashboardUrl || 'N/A'}. ` +
+                  `Run API after unlock: ${runServiceApiUrl || 'N/A'}. ` +
+                  `Next: ${recommendedNextPrompt}`,
               },
             ],
             _meta: {
@@ -249,6 +283,7 @@ export function registerGetServiceTasksTool(server: McpServer, config: BackendCo
           `Found ${result.tasks.length} subsidized task(s) for ${result.display_name}` +
           ` from ${result.sponsor_names.length} sponsor(s).` +
           ` Total available subsidy: $${(result.total_subsidy_cents / 100).toFixed(2)}.`;
+        const firstTask = result.tasks[0] ?? null;
         const recommendedNextPrompt = buildRecommendedNextPrompt(input.service_key, result.tasks[0]?.campaign_id);
 
 
@@ -261,11 +296,20 @@ export function registerGetServiceTasksTool(server: McpServer, config: BackendCo
             task_count: result.tasks.length,
             sponsor_names: result.sponsor_names,
             total_subsidy_cents: result.total_subsidy_cents,
+            frontend_dashboard_url: frontendDashboardUrl,
+            service_run_api_url: runServiceApiUrl,
             recommended_next_prompt: recommendedNextPrompt,
             next_actions: buildNextActions(input.service_key, result.tasks[0]?.campaign_id),
           },
           content: [
-            { type: 'text' as const, text: `${message} Next: ${recommendedNextPrompt}` },
+            {
+              type: 'text' as const,
+              text:
+                `${message} ` +
+                `Campaign details URL: ${firstTask?.frontend_campaign_url || firstTask?.backend_campaign_url || 'N/A'}. ` +
+                `Run API after task: ${firstTask?.run_service_api_url || runServiceApiUrl || 'N/A'}. ` +
+                `Next: ${recommendedNextPrompt}`,
+            },
           ],
           _meta: {
             'openai/outputTemplate': 'ui://widget/service-tasks.html',

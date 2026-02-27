@@ -5,6 +5,11 @@ import { z } from 'zod';
 import { BackendClient, BackendClientError } from '../backend-client.ts';
 import type { BackendConfig } from '../config.ts';
 import type { GptSearchResponse, SearchServicesParams } from '../types.ts';
+import {
+  buildBackendCampaignDetailsUrl,
+  buildBackendRunServiceUrl,
+  buildFrontendCampaignUrl,
+} from './flow-links.ts';
 
 const searchServicesInputSchema = z.object({
   q: z.string().optional(),
@@ -50,19 +55,42 @@ function pickRecommendedServiceKey(response: GptSearchResponse, input: SearchSer
   return typeof fallback === 'string' && fallback.trim().length > 0 ? fallback.trim() : null;
 }
 
-function toSearchServicesResult(response: GptSearchResponse, input: SearchServicesParams) {
+function toSearchServicesResult(response: GptSearchResponse, input: SearchServicesParams, config: BackendConfig) {
   const services = response.services.filter((service) => service.service_type === 'campaign');
   const candidateServices = response.candidate_services ?? [];
   const serviceCatalog = response.service_catalog ?? [];
   const sponsorCatalog = response.sponsor_catalog ?? [];
   const totalCount = services.length;
   const recommendedServiceKey = pickRecommendedServiceKey(response, input);
+  const campaignFlowLinks = services.map((service) => {
+    const inferredServiceKey =
+      service.category.find((category) => typeof category === 'string' && category.trim().length > 0)?.trim() ??
+      recommendedServiceKey ??
+      '';
+    return {
+      campaign_id: service.service_id,
+      campaign_name: service.name,
+      sponsor: service.sponsor,
+      service_key: inferredServiceKey,
+      frontend_campaign_url: buildFrontendCampaignUrl(config.frontendUrl, service.service_id),
+      backend_campaign_url: buildBackendCampaignDetailsUrl(config.rustBackendUrl, service.service_id),
+      run_service_api_url: inferredServiceKey
+        ? buildBackendRunServiceUrl(config.rustBackendUrl, inferredServiceKey)
+        : '',
+    };
+  });
+  const firstCampaign = campaignFlowLinks[0] ?? null;
   const nextActions = buildNextActions(recommendedServiceKey ?? undefined);
   const recommendedNextPrompt = nextActions[0]?.prompt ?? 'Please run get_prompt_guide_flow with context_step=2.';
+  const runServiceApiTemplate = buildBackendRunServiceUrl(config.rustBackendUrl, '<service_key>');
+  const flowSummary =
+    firstCampaign
+      ? `Flow: 1) available service=${firstCampaign.service_key || '<service_key>'} 2) campaign details=${firstCampaign.frontend_campaign_url || firstCampaign.backend_campaign_url} 3) runnable API=${firstCampaign.run_service_api_url || runServiceApiTemplate}`
+      : `Flow: 1) choose available service 2) open campaign details URL 3) run API=${runServiceApiTemplate}`;
   const message =
     totalCount === 0
       ? 'No campaign-backed sponsored services found. Please create or activate a sponsor campaign first.'
-      : `Interactive sponsored services list ready in the widget. Next: ${recommendedNextPrompt}`;
+      : `Interactive sponsored services list ready in the widget. ${flowSummary} Next: ${recommendedNextPrompt}`;
 
   return {
     structuredContent: {
@@ -72,9 +100,11 @@ function toSearchServicesResult(response: GptSearchResponse, input: SearchServic
       candidate_services: candidateServices,
       service_catalog: serviceCatalog,
       sponsor_catalog: sponsorCatalog,
+      campaign_flow_links: campaignFlowLinks,
       applied_filters: response.applied_filters,
       available_categories: response.available_categories,
       recommended_service_key: recommendedServiceKey,
+      run_service_api_template: runServiceApiTemplate,
       recommended_next_prompt: recommendedNextPrompt,
       next_actions: nextActions,
     },
@@ -121,7 +151,7 @@ export function registerSearchServicesTool(server: McpServer, config: BackendCon
     async (input: SearchServicesParams) => {
       try {
         const response = await client.searchServices(input);
-        return toSearchServicesResult(response, input);
+        return toSearchServicesResult(response, input, config);
       } catch (error) {
         if (error instanceof BackendClientError) {
           return {
