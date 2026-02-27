@@ -54,7 +54,7 @@ export class BackendClient {
   constructor(config: BackendConfig) {
     this.baseUrl = config.rustBackendUrl.replace(/\/$/, '');
     this.apiKey = config.mcpInternalApiKey;
-    this.timeoutMs = 15000;
+    this.timeoutMs = config.rustBackendTimeoutMs;
   }
 
   async searchServices(params: SearchServicesParams): Promise<GptSearchResponse> {
