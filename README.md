@@ -1,6 +1,4 @@
-# SubsidyPayment
-
-Payload Exchange Extended (Campaign + Sponsor Subsidy Layer for x402)
+# SapienFuel
 
 Purpose:  
 Intercept the x402 402 Paywall via a proxy and enable sponsors to cover payments in exchange for user task execution and/or data provision.  
