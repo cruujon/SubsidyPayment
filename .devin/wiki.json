@@ -1,1 +1,303 @@
-The content has been copied to your clipboard. Please paste it here to complete the file creation.
+{
+  "repo_notes": [
+    {
+      "content": ""
+    }
+  ],
+  "pages": [
+    {
+      "title": "Overview",
+      "purpose": "Introduce the SapienFuel(SubsidyPayment) system, its purpose, and high-level architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "System Architecture",
+      "purpose": "Explain the multi-service architecture: Rust backend, React frontend, MCP server, and their interactions",
+      "parent": "Overview",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Key Concepts",
+      "purpose": "Define core terminology: x402 protocol, campaigns, sponsors, tasks, subsidies, sessions",
+      "parent": "Overview",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Rust Backend",
+      "purpose": "Overview of the Rust/Axum backend service, its responsibilities and architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Main Entry Point and Routing",
+      "purpose": "Document main.rs, the router hierarchy (27 routes), and middleware stack",
+      "parent": "Rust Backend",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Core API Endpoints",
+      "purpose": "Document the 19 core API routes: profiles, campaigns, proxy, tool, sponsored APIs, webhooks",
+      "parent": "Rust Backend",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "GPT Service Integration",
+      "purpose": "Document the 7 GPT-specific routes in gpt.rs: search, auth, tasks, run service, status, preferences",
+      "parent": "Rust Backend",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Payment Processing",
+      "purpose": "Explain x402 payment integration, onchain.rs, verification/settlement flow, and sponsor matching",
+      "parent": "Rust Backend",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Database Schema",
+      "purpose": "Document PostgreSQL schema, 12 migrations, and key tables (users, campaigns, task_completions, payments, etc.)",
+      "parent": "Rust Backend",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Agent Discovery API",
+      "purpose": "Document the agent discovery endpoints for Claude, OpenClaw, and generic agents with ranking",
+      "parent": "Rust Backend",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Frontend Application",
+      "purpose": "Overview of the React + Vite frontend, its structure and capabilities",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Application Structure",
+      "purpose": "Document App.tsx architecture, state management, view routing, and component hierarchy",
+      "parent": "Frontend Application",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Authentication and Wallet Integration",
+      "purpose": "Explain dual authentication methods: email/password and Web3 wallet (MetaMask) integration",
+      "parent": "Frontend Application",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Campaign Management",
+      "purpose": "Document campaign creation flow, multi-service support, task configuration, and dashboard views",
+      "parent": "Frontend Application",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "API Caller and Testing",
+      "purpose": "Document the API caller tool for testing proxy, tool, and sponsored API execution with payment handling",
+      "parent": "Frontend Application",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Styling and Theme System",
+      "purpose": "Document the CSS custom properties theme system, dark/light mode, and design tokens",
+      "parent": "Frontend Application",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "MCP Server (ChatGPT Integration)",
+      "purpose": "Overview of the Node.js MCP server that bridges ChatGPT to the Rust backend",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "MCP Server Architecture",
+      "purpose": "Explain the adapter pattern, stateless operation, StreamableHTTPTransport, and module structure",
+      "parent": "MCP Server (ChatGPT Integration)",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Tool Registration and Implementation",
+      "purpose": "Document the 8 MCP tools, their schemas, security schemes, and handler implementations",
+      "parent": "MCP Server (ChatGPT Integration)",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Widget System",
+      "purpose": "Explain UI widgets (services-list, task-form, user-dashboard), Vite build process, and widget API",
+      "parent": "MCP Server (ChatGPT Integration)",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "OAuth Authentication Flow",
+      "purpose": "Document Auth0 integration, JWT verification, TokenVerifier, and session token management",
+      "parent": "MCP Server (ChatGPT Integration)",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Backend Client",
+      "purpose": "Document the BackendClient class, 8 typed methods, error handling, and internal API key authentication",
+      "parent": "MCP Server (ChatGPT Integration)",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Payment System",
+      "purpose": "Overview of the dual payment model: sponsor subsidies and direct x402 payments",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "x402 Protocol Integration",
+      "purpose": "Explain x402 payment protocol, facilitator integration, verify/settle flow, and payment signatures",
+      "parent": "Payment System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Sponsor Subsidies",
+      "purpose": "Document campaign-based sponsorship, budget management, user matching, and task completion requirements",
+      "parent": "Payment System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Payment Flow Diagrams",
+      "purpose": "Visual documentation of payment flows: sponsor path, direct payment path, fallback logic",
+      "parent": "Payment System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Deployment",
+      "purpose": "Overview of deployment architecture across Render and Vercel platforms",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Render Deployment",
+      "purpose": "Document render.yaml configuration for backend and MCP server, build commands, health checks",
+      "parent": "Deployment",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Vercel Deployment",
+      "purpose": "Document frontend deployment on Vercel, vercel.json configuration, rewrites, and build process",
+      "parent": "Deployment",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Environment Configuration",
+      "purpose": "Document all environment variables for backend, MCP server, and frontend with examples",
+      "parent": "Deployment",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    }
+  ]
+}
