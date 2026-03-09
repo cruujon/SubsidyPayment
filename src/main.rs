@@ -14,7 +14,7 @@ use axum::{
 use chrono::Utc;
 use prometheus::{Encoder, TextEncoder};
 use sqlx::types::Json as DbJson;
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tracing::info;
@@ -25,30 +25,8 @@ use crate::types::*;
 use crate::utils::*;
 use serde::Deserialize;
 
-fn read_env_bool(name: &str, default: bool) -> bool {
-    std::env::var(name)
-        .ok()
-        .map(|value| {
-            let normalized = value.trim().to_ascii_lowercase();
-            matches!(normalized.as_str(), "1" | "true" | "yes" | "on")
-        })
-        .unwrap_or(default)
-}
-
-fn read_env_u32(name: &str, default: u32) -> u32 {
-    std::env::var(name)
-        .ok()
-        .and_then(|value| value.parse::<u32>().ok())
-        .unwrap_or(default)
-}
-
 fn build_gpt_router(state: SharedState) -> Router<SharedState> {
-    let disable_all_rate_limits = read_env_bool("DISABLE_RATE_LIMITS", false);
-    let disable_gpt_rate_limit =
-        disable_all_rate_limits || read_env_bool("GPT_RATE_LIMIT_DISABLED", false);
-    let gpt_rate_limit_per_min = read_env_u32("GPT_RATE_LIMIT_PER_MIN", 0);
-
-    let mut router = Router::new()
+    Router::new()
         .route("/services", get(gpt::gpt_search_services))
         .route("/auth", post(gpt::gpt_auth))
         .route("/tasks/{campaign_id}", get(gpt::gpt_get_tasks))
@@ -70,41 +48,16 @@ fn build_gpt_router(state: SharedState) -> Router<SharedState> {
         .layer(axum::middleware::from_fn_with_state(
             state,
             gpt::verify_gpt_api_key,
-        ));
-
-    if !disable_gpt_rate_limit && gpt_rate_limit_per_min > 0 {
-        let limiter = Arc::new(tokio::sync::Mutex::new(gpt::RateLimiter::new(
-            gpt_rate_limit_per_min,
-            Duration::from_secs(60),
-        )));
-        router = router.layer(axum::middleware::from_fn_with_state(
-            limiter,
-            gpt::rate_limit_middleware,
-        ));
-    }
-
-    router
+        ))
 }
 
-fn build_agent_discovery_router(
-    state: SharedState,
-    limiter: Option<Arc<tokio::sync::Mutex<gpt::RateLimiter>>>,
-) -> Router<SharedState> {
-    let mut router = Router::new()
+fn build_agent_discovery_router(state: SharedState) -> Router<SharedState> {
+    Router::new()
         .route("/services", get(agent_discovery_services))
         .layer(axum::middleware::from_fn_with_state(
             state,
             verify_agent_discovery_api_key,
-        ));
-
-    if let Some(limiter) = limiter {
-        router = router.layer(axum::middleware::from_fn_with_state(
-            limiter,
-            gpt::rate_limit_middleware,
-        ));
-    }
-
-    router
+        ))
 }
 
 async fn verify_agent_discovery_api_key(
@@ -139,24 +92,7 @@ async fn verify_agent_discovery_api_key(
     Ok(next.run(request).await)
 }
 
-fn build_app(state: SharedState, agent_discovery_limit_per_min: u32) -> Router {
-    let disable_all_rate_limits = read_env_bool("DISABLE_RATE_LIMITS", false);
-    let disable_agent_discovery_rate_limit =
-        disable_all_rate_limits || read_env_bool("AGENT_DISCOVERY_RATE_LIMIT_DISABLED", false);
-    let effective_discovery_rate_limit = read_env_u32(
-        "AGENT_DISCOVERY_RATE_LIMIT_PER_MIN",
-        agent_discovery_limit_per_min,
-    );
-    let discovery_limiter =
-        if disable_agent_discovery_rate_limit || effective_discovery_rate_limit == 0 {
-            None
-        } else {
-            Some(Arc::new(tokio::sync::Mutex::new(gpt::RateLimiter::new(
-                effective_discovery_rate_limit,
-                Duration::from_secs(60),
-            ))))
-        };
-
+fn build_app(state: SharedState, _agent_discovery_limit_per_min: u32) -> Router {
     Router::new()
         .route("/", get(health))
         .route("/health", get(health))
@@ -175,15 +111,15 @@ fn build_app(state: SharedState, agent_discovery_limit_per_min: u32) -> Router {
         .route("/campaigns/discovery", get(list_campaign_discovery))
         .nest(
             "/agent/discovery",
-            build_agent_discovery_router(state.clone(), discovery_limiter.clone()),
+            build_agent_discovery_router(state.clone()),
         )
         .nest(
             "/claude/discovery",
-            build_agent_discovery_router(state.clone(), discovery_limiter.clone()),
+            build_agent_discovery_router(state.clone()),
         )
         .nest(
             "/openclaw/discovery",
-            build_agent_discovery_router(state.clone(), discovery_limiter.clone()),
+            build_agent_discovery_router(state.clone()),
         )
         .route("/campaigns/{campaign_id}", get(get_campaign))
         .route("/tasks/complete", post(complete_task))
