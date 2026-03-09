@@ -44,8 +44,9 @@ fn read_env_u32(name: &str, default: u32) -> u32 {
 
 fn build_gpt_router(state: SharedState) -> Router<SharedState> {
     let disable_all_rate_limits = read_env_bool("DISABLE_RATE_LIMITS", false);
-    let disable_gpt_rate_limit = disable_all_rate_limits || read_env_bool("GPT_RATE_LIMIT_DISABLED", false);
-    let gpt_rate_limit_per_min = read_env_u32("GPT_RATE_LIMIT_PER_MIN", 60);
+    let disable_gpt_rate_limit =
+        disable_all_rate_limits || read_env_bool("GPT_RATE_LIMIT_DISABLED", false);
+    let gpt_rate_limit_per_min = read_env_u32("GPT_RATE_LIMIT_PER_MIN", 0);
 
     let mut router = Router::new()
         .route("/services", get(gpt::gpt_search_services))
@@ -66,7 +67,10 @@ fn build_gpt_router(state: SharedState) -> Router<SharedState> {
             "/preferences",
             get(gpt::gpt_get_preferences).post(gpt::gpt_set_preferences),
         )
-        .layer(axum::middleware::from_fn_with_state(state, gpt::verify_gpt_api_key));
+        .layer(axum::middleware::from_fn_with_state(
+            state,
+            gpt::verify_gpt_api_key,
+        ));
 
     if !disable_gpt_rate_limit && gpt_rate_limit_per_min > 0 {
         let limiter = Arc::new(tokio::sync::Mutex::new(gpt::RateLimiter::new(
@@ -139,16 +143,19 @@ fn build_app(state: SharedState, agent_discovery_limit_per_min: u32) -> Router {
     let disable_all_rate_limits = read_env_bool("DISABLE_RATE_LIMITS", false);
     let disable_agent_discovery_rate_limit =
         disable_all_rate_limits || read_env_bool("AGENT_DISCOVERY_RATE_LIMIT_DISABLED", false);
-    let effective_discovery_rate_limit =
-        read_env_u32("AGENT_DISCOVERY_RATE_LIMIT_PER_MIN", agent_discovery_limit_per_min);
-    let discovery_limiter = if disable_agent_discovery_rate_limit || effective_discovery_rate_limit == 0 {
-        None
-    } else {
-        Some(Arc::new(tokio::sync::Mutex::new(gpt::RateLimiter::new(
-            effective_discovery_rate_limit,
-            Duration::from_secs(60),
-        ))))
-    };
+    let effective_discovery_rate_limit = read_env_u32(
+        "AGENT_DISCOVERY_RATE_LIMIT_PER_MIN",
+        agent_discovery_limit_per_min,
+    );
+    let discovery_limiter =
+        if disable_agent_discovery_rate_limit || effective_discovery_rate_limit == 0 {
+            None
+        } else {
+            Some(Arc::new(tokio::sync::Mutex::new(gpt::RateLimiter::new(
+                effective_discovery_rate_limit,
+                Duration::from_secs(60),
+            ))))
+        };
 
     Router::new()
         .route("/", get(health))
