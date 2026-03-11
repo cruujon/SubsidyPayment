@@ -1,7 +1,7 @@
 # SapienFuel
 
 Purpose:  
-Intercept the x402 402 Paywall via a proxy and enable sponsors to cover payments in exchange for user task execution and/or data provision.  
+Intercept the x402 Paywall via a proxy and enable sponsors to cover payments in exchange for user task execution and/or data provision.  
 Additionally, sponsors can create and distribute “campaigns,” allowing users to naturally utilize this mechanism through major AI / developer UIs.
 
 ---
